@@ -120,6 +120,7 @@ dependencies = [
  "futures",
  "serde",
  "serde_json_path_to_error",
+ "sha3",
  "tracing",
  "tracing-subscriber",
  "verifier",
