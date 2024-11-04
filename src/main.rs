@@ -49,35 +49,36 @@ impl FileValidator {
         let mut log_data: Vec<String> = Vec::new();
 
         if !path.exists() {
-            tracing::error!("❌ File does not exist");
-            log_data.push("❌ File does not exist".to_string());
+            log_data.push("Error :  File does not exist".to_string());
             return Err(log_data);
+        }else {
+            log_data.push("Success :  File exists".to_string());
         }
 
         let data_file = fs::read(path);
 
         if data_file.is_err(){
-            tracing::error!("❌ Unable to read file");
-            log_data.push("❌ Unable to read file".to_string());
-            return Err(log_data);
-            
+            log_data.push("Error :  Unable to read file".to_string());
+            return Err(log_data);  
+        }else {
+            log_data.push("Success :  File read sucessfuly".to_string());
         }
+
         let data = data_file.unwrap();
 
         // Try to parse the file content into your struct
         match serde_json::from_slice::<PageDataContainer<HashChain>>(&data) {
             Ok(parsed_data) => {
-                info!("✅  File JSON parsed successfully");
-
+                log_data.push("Success  :  File JSON parsed successfully".to_string());
 
                         let mut matches = true;
                         let mut failure_reason = "".to_string();
                         let parsed_data_chain = parsed_data.pages.get(0).unwrap();
                         // if the aqua json file has more than one revision compare the has
                         // current has with the previous  metadata > verification_hash
-                        tracing::error!("Loop starts");
+                       
                         if parsed_data_chain.revisions.len() > 1 {
-                            tracing::error!("revisions more than 1 result");
+                            log_data.push("Info : revisions more than 1 result".to_string());
                             (matches, failure_reason) = check_if_page_data_revision_are_okay(
                                 parsed_data_chain.revisions.clone(),
                             );
@@ -151,9 +152,9 @@ impl FileValidator {
                
             }
             Err(e) => {
-                log_data.push(format!("Failed to parse JSON: {:?}", e));
+                log_data.push(format!("error : Failed to parse JSON: {:?}", e));
                 return Err(log_data);
-                // Err(format!("Error parsing the file {:#?}", e).into())
+                
             }
         }
     }
@@ -206,10 +207,10 @@ fn build_cli() -> Command {
                 .long("level")
                 .help("Set validation strictness level")
                 .long_help("Define how strict the validation should be:
-                    1: Basic validation
+                    1: Strict validation
                     2: Standard validation
-                    3: Strict validation")
-                .value_parser(["1", "2", "3"])
+                   ")
+                .value_parser(["1", "2"])
                 .default_value("2")
         )
 }
