@@ -76,7 +76,7 @@ impl FileValidator {
                         // if the aqua json file has more than one revision compare the has
                         // current has with the previous  metadata > verification_hash
                         tracing::error!("Loop starts");
-                        if (parsed_data_chain.revisions.len() > 1) {
+                        if parsed_data_chain.revisions.len() > 1 {
                             tracing::error!("revisions more than 1 result");
                             (matches, failure_reason) = check_if_page_data_revision_are_okay(
                                 parsed_data_chain.revisions.clone(),

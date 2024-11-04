@@ -4,8 +4,7 @@ use aqua_verifier_rs_types::models::content::RevisionContent;
 use verifier::verification::content_hash;
 use std::collections::BTreeMap;
 use aqua_verifier_rs_types::crypt::Sha3_512;
-
-use sha3::{Digest, Sha3_512};
+use sha3::{Digest};
 
 pub fn check_if_page_data_revision_are_okay(revisions: Vec<(Hash, Revision)>) -> (bool, String) {
     let mut is_valid = (true, "".to_string());
