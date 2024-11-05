@@ -1,18 +1,12 @@
 pub mod models;
 pub mod utils;
+pub mod validate;
 
-use aqua_verifier_rs_types::models::page_data::HashChain;
 use clap::{Arg, Command};
-use models::PageDataContainer;
 use std::error::Error;
-use std::fs;
-use std::path::Path;
-use crate::utils::compute_content_hash;
+
+use crate::models::FileValidator;
 extern crate serde_json_path_to_error as serde_json;
-use utils::check_if_page_data_revision_are_okay;
-use console::Style;
-use tracing::{error, info, warn, Level};
-use tracing_subscriber::{fmt, EnvFilter};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -24,144 +18,19 @@ This tool validates files using a aqua protocol. It can:
   • Generate validation reports
 
 EXAMPLES:
-    file-validator -f document.json
-    file-validator --file document.json --verbose
-    file-validator -f document.json --output report.json
+    aqua-cli -v chain.json
+    aqua-cli -s chain.json --output report.json
+    aqua-cli -w chain.json --output report.json
+
+    aqua-cli -f document.pdf
+    aqua-cli --file image.png --verbose
+    aqua-cli -f document.json --output report.json
 
 For more information, visit: https://github.com/inblockio/aqua-verifier-cli"#;
 
-pub struct FileValidator {
-    file_path: String,
-}
-
-impl FileValidator {
-    pub fn new(file_path: String) -> Self {
-        Self { file_path }
-    }
-
-    pub fn validate(
-        &self,
-        output_file: Option<&String>,
-        verbose: bool,
-        output_level: i8,
-    ) -> Result<bool, Vec<String>> {
-        let path = Path::new(&self.file_path);
-        let mut log_data: Vec<String> = Vec::new();
-
-        if !path.exists() {
-            log_data.push("Error :  File does not exist".to_string());
-            return Err(log_data);
-        }else {
-            log_data.push("Success :  File exists".to_string());
-        }
-
-        let data_file = fs::read(path);
-
-        if data_file.is_err(){
-            log_data.push("Error :  Unable to read file".to_string());
-            return Err(log_data);  
-        }else {
-            log_data.push("Success :  File read sucessfuly".to_string());
-        }
-
-        let data = data_file.unwrap();
-
-        // Try to parse the file content into your struct
-        match serde_json::from_slice::<PageDataContainer<HashChain>>(&data) {
-            Ok(parsed_data) => {
-                log_data.push("Success  :  File JSON parsed successfully".to_string());
-
-                        let mut matches = true;
-                        let mut failure_reason = "".to_string();
-                        let parsed_data_chain = parsed_data.pages.get(0).unwrap();
-                        // if the aqua json file has more than one revision compare the has
-                        // current has with the previous  metadata > verification_hash
-                       
-                        if parsed_data_chain.revisions.len() > 1 {
-                            log_data.push("Info : revisions more than 1 result".to_string());
-                            (matches, failure_reason) = check_if_page_data_revision_are_okay(
-                                parsed_data_chain.revisions.clone(),
-                            );
-                            tracing::error!("revisions are valied ? {}", matches);
-                        } else {
-                            // let rev  = parsed_data_chain.revisions.get(0).unwrap();
-                            // let hash =  compute_content_hash(rev);
-
-                            let (verification_hash, revision) = parsed_data_chain
-                                .revisions
-                                .first()
-                                .expect("No revisions found");
-
-                            // Step 3: Recompute the content hash for the revision
-                            let recomputed_content_hash = compute_content_hash(&revision.content);
-
-                            match recomputed_content_hash {
-                                Ok(data) => {
-                                    // Step 4: Compare the recomputed content hash with the stored content hash
-
-                                    let contnent_hash_str =
-                                        format!("{:#?}", revision.content.content_hash);
-                                    let data_str = format!("{:#?}", revision.content.content_hash);
-                                    // data_str,
-                                    // contnent_hash_str
-
-                                    tracing::error!(
-                                        " returd conetnet is   {} \n  my son content hash is {} \n",
-                                        data_str,
-                                        contnent_hash_str
-                                    );
-                                    if data == revision.content.content_hash {
-                                        matches = true;
-                                    } else {
-                                        failure_reason = format!(
-                                            "a hash is not valid : {:#?}",
-                                            revision.content.content_hash
-                                        )
-                                    }
-                                    //revision.content.content_hash;
-                                }
-                                Err(err) => {
-                                    tracing::error!("❌ Error compute_content_hash {} ", err);
-                                    log_data.push("Erorr :  recomputing content hash ".to_string());
-                                   
-                                   return Err(log_data);
-                                    // Err(format!("❌ Error  compute_content_hash  {:#?}", err).into());
-                                    // Err(Box::new(std::io::Error::new(
-                                    //     std::io::ErrorKind::Other, 
-                                    //     format!("❌ Error compute_content_hash {:#?}", err)
-                                    // )))
-                                }
-                            }
-                        }
-                        tracing::info!("....Done  Checking all revisions, summarizing results....");
-                        return if matches {
-                            tracing::error!("Returning true");
-                            log_data.push("AQUA Chain valid".to_string());
-                            Ok(true)
-                        } else {
-                            tracing::error!("Validation fails");
-                            log_data.push(failure_reason);
-                            return Err(log_data);
-                            // Err(format!("❌ Error validating the json file  {:#?}", failure_reason).into())
-                            // Err(Box::new(std::io::Error::new(
-                            //     std::io::ErrorKind::Other, 
-                            //     format!("❌  Error validating the json file{:#?}", failure_reason)
-                            // )))
-                        };
-
-               
-            }
-            Err(e) => {
-                log_data.push(format!("error : Failed to parse JSON: {:?}", e));
-                return Err(log_data);
-                
-            }
-        }
-    }
-}
 
 fn build_cli() -> Command {
-    Command::new("file-validator")
+    Command::new("aqua-cli")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
@@ -230,52 +99,50 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let default_level = String::from("2");
     let level = matches.get_one::<String>("level").unwrap_or(&default_level);
 
-    if verbose {
-        info!("📋 Validation Settings:");
-        info!("  • File: {}", file_path);
-        info!("  • Validation Level: {}", level);
-        if let Some(out) = output {
-            info!("  • Output Report: {}", out);
+    
+        tracing::info!("📋 Validation Settings:");
+        tracing::info!("  • File: {}", file_path);
+        tracing::info!("  • Validation Level: {}", level);
+
+
+        let validator = FileValidator::new(file_path.to_string());
+      
+
+    match validator.validate() {
+        Ok((true, logs)) => {
+           
+            tracing::info!(
+                
+                "✅ Verification successful ",
+                
+            );
+
+            for ele in logs {
+                println!("{} \n", ele);
+            }
+        }
+        Ok((false, logs)) => {
+            tracing::error!(
+                "❌ Verification Failed",
+                
+            );
+            for ele in logs {
+                println!("{} \n", ele);
+            }
+           
+        }
+        Err(logs) => {
+            tracing::error!(
+                "💣 Error occurred during validation",
+                
+            );
+            for ele in logs {
+                println!("{} \n", ele);
+            }
+           
         }
     }
-
-    let validator = FileValidator::new(file_path.to_string());
-
-    // Convert &str to i8
-    let level_number = match level.parse::<i8>() {
-        Ok(n) => {
-            info!("Log number: {}", n);
-            n
-        }
-        Err(e) => {
-            error!("Failed to parse: {}", e);
-            2
-        }
-    };
-
-    match validator.validate(output, verbose, level_number) {
-        Ok(true) => {
-            info!(
-                target: "file_validator",
-                "✅ {}",
-                Style::new().green().apply_to("File validation successful")
-            );
-        }
-        Ok(false) => {
-            warn!(
-                target: "file_validator",
-                "❌ {}",
-                Style::new().red().apply_to("File validation failed")
-            );
-        }
-        Err(e) => {
-            error!(
-            
-                "⚠️  Error: {:#?}",e              
-            );
-        }
-    }
-
+    
     Ok(())
 }
 

@@ -14,3 +14,4 @@ aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 console = "0.15"
+base64 = "0.22.1"

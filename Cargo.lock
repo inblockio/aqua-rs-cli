@@ -115,6 +115,7 @@ name = "aqua-cli"
 version = "0.1.0"
 dependencies = [
  "aqua-verifier-rs-types",
+ "base64 0.22.1",
  "clap",
  "console",
  "futures",
