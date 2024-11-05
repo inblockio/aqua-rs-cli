@@ -42,7 +42,6 @@ fn build_cli() -> Command {
                 .long("file")
                 .help("Path to the file to validate")
                 .long_help("Full path to the file that needs to be validated. Supported formats include: PDF, DOC, TXT, etc.")
-                .required(true)
                 .value_name("FILE")
         )
         // Verbose output
@@ -81,6 +80,33 @@ fn build_cli() -> Command {
                    ")
                 .value_parser(["1", "2"])
                 .default_value("2")
+        )
+         // verify level
+         .arg(
+            Arg::new("verify")
+                .short('v')
+                .long("verify")
+                .help("verify an aqua chain")
+                .long_help("verify if aqua chain & its revsions are valid")
+                .value_name("verify")
+        )
+        // witness aqua chain
+        .arg(
+            Arg::new("witness")
+                .short('w')
+                .long("witness")
+                .help("witness an aqua chain")
+                .long_help("create a revision witness")
+                .value_name("witness")
+        )
+        // sign   aqua chain
+        .arg(
+            Arg::new("sign")
+                .short('s')
+                .long("sign")
+                .help("sign an aqua chain")
+                .long_help("create a revision with sign")
+                .value_name("sign")
         )
 }
 
