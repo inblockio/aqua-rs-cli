@@ -7,8 +7,8 @@ use models::PageDataContainer;
 use std::fs;
 use std::path::{Path, PathBuf};
 use utils::{read_aqua_data, save_logs_to_file};
-use verifier::verifier::verify_aqua_chain;
 use verifier::model::ResultStatusEnum;
+use verifier::verifier::verify_aqua_chain;
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -243,22 +243,93 @@ fn main() {
                 };
                 logs_data.push(log_line);
 
-                if i.file_verification.status == ResultStatusEnum::AVAILABLE {
                 // file verification
-                let file_verification_log = if i.file_verification.successful {
-                    "\t\t Success :  File content is succefull".to_string()
+                if i.file_verification.status == ResultStatusEnum::AVAILABLE {
+                    
+                    let file_verification_log = if i.file_verification.successful {
+                        "\t\t Success :  File verification is succefull".to_string()
+                    } else {
+                        "\t\t Error : File verification failed".to_string()
+                    };
+                    logs_data.push(file_verification_log);
+
+                    for ele in i.file_verification.logs {
+                        logs_data.push(format!("\t\t\t {}", ele))
+                    }
                 } else {
-                    "\t\t Error : File content is not valid".to_string()
-                };
-                logs_data.push(file_verification_log);
-
-                for ele in i.file_verification.logs {
-                    logs_data.push(format!("\t\t\t {}", ele))
+                    logs_data.push("Info : File verification not found".to_string());
                 }
-            }else{
-                logs_data.push("Info : File content not found".to_string());
-            }
 
+                // content verification
+                if i.content_verification.status == ResultStatusEnum::AVAILABLE {
+                    
+                    let content_verification_log = if i.content_verification.successful {
+                        "\t\t Success : Content verification is succefull".to_string()
+                    } else {
+                        "\t\t Error : Content verification is not valid".to_string()
+                    };
+                    logs_data.push(content_verification_log);
+
+                    for ele in i.content_verification.logs {
+                        logs_data.push(format!("\t\t\t {}", ele))
+                    }
+                } else {
+                    logs_data.push("Info : content verification not found".to_string());
+                }
+
+                // metadata verification
+                if i.metadata_verification.status == ResultStatusEnum::AVAILABLE {
+                   
+                    let metadata_verification_log = if i.metadata_verification.successful {
+                        "\t\t Success : metadata verification is succefull".to_string()
+                    } else {
+                        "\t\t Error : metadata verification is not valid".to_string()
+                    };
+                    logs_data.push(metadata_verification_log);
+
+                    for ele in i.metadata_verification.logs {
+                        logs_data.push(format!("\t\t\t {}", ele))
+                    }
+                } else {
+                    logs_data.push("Info : metadata verification not found".to_string());
+                }
+
+                //witness verification
+                if i.witness_verification.status == ResultStatusEnum::AVAILABLE {
+                   
+                    let witness_verification_log = if i.witness_verification.successful {
+                        "\t\t Success : witness verification is succefull".to_string()
+                    } else {
+                        "\t\t Error : witness verification is not valid".to_string()
+                    };
+                    logs_data.push(witness_verification_log);
+
+                    for ele in i.witness_verification.logs {
+                        logs_data.push(format!("\t\t\t {}", ele))
+                    }
+                } else {
+                    logs_data.push("Info : witness verification not found".to_string());
+                }
+
+
+                //signature verification
+                if i.signature_verification.status == ResultStatusEnum::AVAILABLE {
+                   
+                    let signature_verification_log = if i.signature_verification.successful {
+                        "\t\t Success : signature verification is succefull".to_string()
+                    } else {
+                        "\t\t Error : signature verification is not valid".to_string()
+                    };
+                    logs_data.push(signature_verification_log);
+
+                    for ele in i.signature_verification.logs {
+                        logs_data.push(format!("\t\t\t {}", ele))
+                    }
+                } else {
+                    logs_data.push("Info : signature verification not found".to_string());
+                }
+
+                logs_data.push("Info : ============= Proceeding to the next revision =============".to_string());
 
             }
 

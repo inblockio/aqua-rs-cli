@@ -1,9 +1,5 @@
-// use crate::utils::{check_if_page_data_revision_are_okay, compute_content_hash};
 use aqua_verifier_rs_types::models::page_data::HashChain;
 use serde::{Deserialize, Serialize};
-// use std::fs;
-// use std::path::Path;
-// extern crate serde_json_path_to_error as serde_json;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PageDataContainer {
