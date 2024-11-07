@@ -5,9 +5,9 @@ use aqua_verifier_rs_types::models::page_data::PageData;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use std::fs;
 use std::path::{Path, PathBuf};
-use utils::{read_aqua_data, save_logs_to_file};
+use utils::{read_aqua_data, save_logs_to_file, save_page_data};
 use verifier::model::ResultStatusEnum;
-use verifier::verifier::{generate_aqua_chain, verify_aqua_chain};
+use verifier::verifier::{generate_aqua_chain, sign_aqua_chain, verify_aqua_chain, witness_aqua_chain};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -177,7 +177,7 @@ fn is_valid_output_file(s: &str) -> Result<String, String> {
 
 // Example usage in main function
 fn main() {
-    let mut logs_data: Vec<String> = Vec::new();
+    
 
     let args = parse_args().unwrap_or_else(|err| {
         eprintln!("Error: {}", err);
@@ -195,6 +195,8 @@ fn main() {
     // Process the arguments based on the combination
     match (args.verify, args.sign, args.witness, args.file.is_some()) {
         (Some(verify_path), _, _, _) => {
+            let mut logs_data: Vec<String> = Vec::new();
+
             println!("Verifying file: {:?}", verify_path);
             // Verify the file
             let res: Result<PageData, String> = read_aqua_data(&verify_path);
@@ -203,7 +205,7 @@ fn main() {
                 logs_data.push(res.err().unwrap());
 
                 if args.output.is_some() {
-                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
 
                     if logs.is_err() {
                         eprintln!("Error:  saving logs {}", logs.unwrap());
@@ -216,7 +218,7 @@ fn main() {
             if aqua_chain.is_none() {
                 logs_data.push("no aqua chain found in page data".to_string());
                 if args.output.is_some() {
-                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
 
                     if logs.is_err() {
                         eprintln!("Error:  saving logs {}", logs.unwrap());
@@ -337,7 +339,7 @@ fn main() {
 
             //if verbose print out the logs if not print the last line
             if args.details {
-                for item in logs_data {
+                for item in logs_data.clone() {
                     println!("{}", item);
                 }
             } else {
@@ -346,7 +348,7 @@ fn main() {
 
             // if output is specified save the logs
             if args.output.is_some() {
-                let logs = save_logs_to_file(logs_data, args.output.unwrap());
+                let logs = save_logs_to_file(&logs_data, args.output.unwrap());
                 if logs.is_err() {
                     eprintln!("Error:  saving logs {}", logs.unwrap());
                 }
@@ -355,16 +357,17 @@ fn main() {
             return;
         }
         (_, Some(sign_path), _, _) => {
-            println!("Signing file: {:?}", sign_path);
-            // Sign the file
+            let mut logs_data: Vec<String> = Vec::new();
 
+            println!("Signing file: {:?}", sign_path);
+           
             let res: Result<PageData, String> = read_aqua_data(&sign_path);
             // file reading error
             if res.is_err() {
                 logs_data.push(res.err().unwrap());
 
                 if args.output.is_some() {
-                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
 
                     if logs.is_err() {
                         eprintln!("Error:  saving logs {}", logs.unwrap());
@@ -377,7 +380,7 @@ fn main() {
             if aqua_chain.is_none() {
                 logs_data.push("no aqua chain found in page data".to_string());
                 if args.output.is_some() {
-                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
 
                     if logs.is_err() {
                         eprintln!("Error:  saving logs {}", logs.unwrap());
@@ -386,17 +389,109 @@ fn main() {
                 return;
             }
 
+            let res = sign_aqua_chain(aqua_chain.unwrap().clone());
 
+            let log_line = if res.is_ok() {
+                "Success :  Signing Aqua chain is successful ".to_string()
+            } else {
+                "Error : Signing Aqua chain  failed".to_string()
+            };
+            logs_data.push(log_line);
 
+           
+            if let Err(e) = save_page_data(&aqua_page_data, &sign_path, ".signed.json".to_string()) {
+                logs_data.push(format!("Error saving page data: {}", e));
+            }
 
+            //if verbose print out the logs if not print the last line
+            if args.details {
+                for item in logs_data.clone() {
+                    println!("{}", item);
+                }
+            } else {
+                println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
+            }
+
+            // if output is specified save the logs
+            if args.output.is_some() {
+                let logs = save_logs_to_file(&logs_data, args.output.unwrap());
+                if logs.is_err() {
+                    eprintln!("Error:  saving logs {}", logs.unwrap());
+                }
+            }
+
+            return;
         }
         (_, _, Some(witness_path), _) => {
+            let mut logs_data: Vec<String> = Vec::new();
+
             println!("Witnessing file: {:?}", witness_path);
             // Witness the file
 
 
+            let res: Result<PageData, String> = read_aqua_data(&witness_path);
+            // file reading error
+            if res.is_err() {
+                logs_data.push(res.err().unwrap());
+
+                if args.output.is_some() {
+                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
+
+                    if logs.is_err() {
+                        eprintln!("Error:  saving logs {}", logs.unwrap());
+                    }
+                }
+                return;
+            }
+            let aqua_page_data = res.unwrap();
+            let aqua_chain = aqua_page_data.pages.get(0);
+            if aqua_chain.is_none() {
+                logs_data.push("no aqua chain found in page data".to_string());
+                if args.output.is_some() {
+                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
+
+                    if logs.is_err() {
+                        eprintln!("Error:  saving logs {}", logs.unwrap());
+                    }
+                }
+                return;
+            }
+
+            let res = witness_aqua_chain(aqua_chain.unwrap().clone(),);
+
+            let log_line = if res.is_ok() {
+                "Success :  Witnessing Aqua chain is successful ".to_string()
+            } else {
+                "Error : Witnessing Aqua chain  failed".to_string()
+            };
+            logs_data.push(log_line);
+
+            // In your main code, replace the TODO with:
+            if let Err(e) = save_page_data(&aqua_page_data, &witness_path, ".witness.json".to_string()) {
+                logs_data.push(format!("Error saving page data: {}", e));
+            }
+
+            //if verbose print out the logs if not print the last line
+            if args.details {
+                for item in logs_data.clone() {
+                    println!("{}", item);
+                }
+            } else {
+                println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
+            }
+
+            // if output is specified save the logs
+            if args.output.is_some() {
+                let logs = save_logs_to_file(&logs_data, args.output.unwrap());
+                if logs.is_err() {
+                    eprintln!("Error:  saving logs {}", logs.unwrap());
+                }
+            }
+
         }
         (_, _, _, true) => {
+            let mut logs_data: Vec<String> = Vec::new();
+
             if let Some(file_path) = args.file {
                 tracing::info!("Generating aqua file from: {:?}", file_path);
                 // Generate the aqua file
@@ -429,7 +524,7 @@ fn main() {
 
                                             //if verbose print out the logs if not print the last line
                                             if args.details {
-                                                for item in logs_data {
+                                                for item in logs_data.clone() {
                                                     println!("{}", item);
                                                 }
                                             } else {
@@ -444,7 +539,7 @@ fn main() {
                                             // if output is specified save the logs
                                             if args.output.is_some() {
                                                 let logs = save_logs_to_file(
-                                                    logs_data,
+                                                    &logs_data,
                                                     args.output.unwrap(),
                                                 );
                                                 if logs.is_err() {
@@ -463,7 +558,7 @@ fn main() {
                                             // if output is specified save the logs
                                             if args.output.is_some() {
                                                 let logs = save_logs_to_file(
-                                                    logs_data,
+                                                    &logs_data,
                                                     args.output.unwrap(),
                                                 );
                                                 if logs.is_err() {
@@ -505,7 +600,7 @@ fn main() {
                 } else {
                     eprintln!("Error: Invalid file path provided with -f/--file");
                 }
-            }else {
+            } else {
                 tracing::error!("Failed to generate Aqua file, check file path ")
             }
         }
