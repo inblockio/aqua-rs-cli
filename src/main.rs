@@ -1,14 +1,13 @@
 pub mod models;
 pub mod utils;
 
-use aqua_verifier_rs_types::models::page_data::HashChain;
+use aqua_verifier_rs_types::models::page_data::PageData;
 use clap::{Arg, ArgAction, ArgGroup, Command};
-use models::PageDataContainer;
 use std::fs;
 use std::path::{Path, PathBuf};
 use utils::{read_aqua_data, save_logs_to_file};
 use verifier::model::ResultStatusEnum;
-use verifier::verifier::verify_aqua_chain;
+use verifier::verifier::{generate_aqua_chain, verify_aqua_chain};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -198,7 +197,7 @@ fn main() {
         (Some(verify_path), _, _, _) => {
             println!("Verifying file: {:?}", verify_path);
             // Verify the file
-            let res: Result<PageDataContainer, String> = read_aqua_data(&verify_path);
+            let res: Result<PageData, String> = read_aqua_data(&verify_path);
             // file reading error
             if res.is_err() {
                 logs_data.push(res.err().unwrap());
@@ -245,7 +244,6 @@ fn main() {
 
                 // file verification
                 if i.file_verification.status == ResultStatusEnum::AVAILABLE {
-                    
                     let file_verification_log = if i.file_verification.successful {
                         "\t\t Success :  File verification is succefull".to_string()
                     } else {
@@ -262,7 +260,6 @@ fn main() {
 
                 // content verification
                 if i.content_verification.status == ResultStatusEnum::AVAILABLE {
-                    
                     let content_verification_log = if i.content_verification.successful {
                         "\t\t Success : Content verification is succefull".to_string()
                     } else {
@@ -279,7 +276,6 @@ fn main() {
 
                 // metadata verification
                 if i.metadata_verification.status == ResultStatusEnum::AVAILABLE {
-                   
                     let metadata_verification_log = if i.metadata_verification.successful {
                         "\t\t Success : metadata verification is succefull".to_string()
                     } else {
@@ -296,7 +292,6 @@ fn main() {
 
                 //witness verification
                 if i.witness_verification.status == ResultStatusEnum::AVAILABLE {
-                   
                     let witness_verification_log = if i.witness_verification.successful {
                         "\t\t Success : witness verification is succefull".to_string()
                     } else {
@@ -311,10 +306,8 @@ fn main() {
                     logs_data.push("Info : witness verification not found".to_string());
                 }
 
-
                 //signature verification
                 if i.signature_verification.status == ResultStatusEnum::AVAILABLE {
-                   
                     let signature_verification_log = if i.signature_verification.successful {
                         "\t\t Success : signature verification is succefull".to_string()
                     } else {
@@ -329,8 +322,10 @@ fn main() {
                     logs_data.push("Info : signature verification not found".to_string());
                 }
 
-                logs_data.push("Info : ============= Proceeding to the next revision =============".to_string());
-
+                logs_data.push(
+                    "Info : ============= Proceeding to the next revision ============="
+                        .to_string(),
+                );
             }
 
             let log_line = if res.successful {
@@ -339,15 +334,67 @@ fn main() {
                 "Error : Validation  failed".to_string()
             };
             logs_data.push(log_line);
+
+            //if verbose print out the logs if not print the last line
+            if args.details {
+                for item in logs_data {
+                    println!("{}", item);
+                }
+            } else {
+                println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
+            }
+
+            // if output is specified save the logs
+            if args.output.is_some() {
+                let logs = save_logs_to_file(logs_data, args.output.unwrap());
+                if logs.is_err() {
+                    eprintln!("Error:  saving logs {}", logs.unwrap());
+                }
+            }
+
             return;
         }
         (_, Some(sign_path), _, _) => {
             println!("Signing file: {:?}", sign_path);
             // Sign the file
+
+            let res: Result<PageData, String> = read_aqua_data(&sign_path);
+            // file reading error
+            if res.is_err() {
+                logs_data.push(res.err().unwrap());
+
+                if args.output.is_some() {
+                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+
+                    if logs.is_err() {
+                        eprintln!("Error:  saving logs {}", logs.unwrap());
+                    }
+                }
+                return;
+            }
+            let aqua_page_data = res.unwrap();
+            let aqua_chain = aqua_page_data.pages.get(0);
+            if aqua_chain.is_none() {
+                logs_data.push("no aqua chain found in page data".to_string());
+                if args.output.is_some() {
+                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+
+                    if logs.is_err() {
+                        eprintln!("Error:  saving logs {}", logs.unwrap());
+                    }
+                }
+                return;
+            }
+
+
+
+
         }
         (_, _, Some(witness_path), _) => {
             println!("Witnessing file: {:?}", witness_path);
             // Witness the file
+
+
         }
         (_, _, _, true) => {
             if let Some(file_path) = args.file {
@@ -359,6 +406,97 @@ fn main() {
                         Ok(_) => {
                             println!("Generating aqua file: {:?}", json_path);
                             // Generate the aqua file
+
+                            // Read the file content into a Vec<u8>
+                            match fs::read(&file_path) {
+                                Ok(body_bytes) => {
+                                    // Convert the file name to a String
+                                    let file_name = file_name.to_string();
+
+                                    let domain_id = std::env::var("API_DOMAIN")
+                                        .unwrap_or_else(|_| "cli_domain_id".to_string());
+
+                                    // Call generate_aqua_chain with the necessary arguments
+                                    match generate_aqua_chain(body_bytes, file_name, domain_id) {
+                                        Ok(result) => {
+                                            for ele in result.logs {
+                                                logs_data.push(format!("\t\t {}", ele));
+                                            }
+
+                                            logs_data.push(
+                                                "Success :  Validation is successful ".to_string(),
+                                            );
+
+                                            //if verbose print out the logs if not print the last line
+                                            if args.details {
+                                                for item in logs_data {
+                                                    println!("{}", item);
+                                                }
+                                            } else {
+                                                println!(
+                                                    "{}",
+                                                    logs_data
+                                                        .last()
+                                                        .unwrap_or(&"Result".to_string())
+                                                )
+                                            }
+
+                                            // if output is specified save the logs
+                                            if args.output.is_some() {
+                                                let logs = save_logs_to_file(
+                                                    logs_data,
+                                                    args.output.unwrap(),
+                                                );
+                                                if logs.is_err() {
+                                                    eprintln!(
+                                                        "Error:  saving logs {}",
+                                                        logs.unwrap()
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        Err(logs) => {
+                                            for ele in logs {
+                                                logs_data.push(format!("\t\t {}", ele));
+                                            }
+
+                                            // if output is specified save the logs
+                                            if args.output.is_some() {
+                                                let logs = save_logs_to_file(
+                                                    logs_data,
+                                                    args.output.unwrap(),
+                                                );
+                                                if logs.is_err() {
+                                                    eprintln!(
+                                                        "Error:  saving logs {}",
+                                                        logs.unwrap()
+                                                    );
+                                                }
+                                            }
+                                            logs_data.push(
+                                                "Error : Failed to generate aqua chain".to_string(),
+                                            );
+
+                                            //if verbose print out the logs if not print the last line
+                                            if args.details {
+                                                for item in logs_data {
+                                                    println!("{}", item);
+                                                }
+                                            } else {
+                                                println!(
+                                                    "{}",
+                                                    logs_data
+                                                        .last()
+                                                        .unwrap_or(&"Result".to_string())
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to read file bytes: {}", e);
+                                }
+                            }
                         }
                         Err(err) => {
                             eprintln!("Error generating aqua file: {}", err);
@@ -367,6 +505,8 @@ fn main() {
                 } else {
                     eprintln!("Error: Invalid file path provided with -f/--file");
                 }
+            }else {
+                tracing::error!("Failed to generate Aqua file, check file path ")
             }
         }
         _ => unreachable!("Clap ensures at least one operation is selected"),
