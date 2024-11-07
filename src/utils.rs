@@ -1,13 +1,31 @@
-use std::{fs, path::{Path, PathBuf}};
-
-use aqua_verifier_rs_types::models::page_data::{HashChain, PageData};
+use std::{fs::{self, OpenOptions}, path::{Path, PathBuf}};
+use std::io::Write;
+use aqua_verifier_rs_types::models::page_data::PageData;
 
 
 extern crate serde_json_path_to_error as serde_json;
 
 pub fn save_logs_to_file(logs : &Vec<String>, output_file : PathBuf, ) -> Result<String, String> {
 
-    return Ok("log written".to_string());
+
+ // Open the file in append mode, create it if it doesn't exist
+    let mut file = match OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&output_file)
+    {
+        Ok(f) => f,
+        Err(e) => return Err(format!("Failed to open log file: {}", e)),
+    };
+
+    // Write each log entry to the file, adding a newline after each one
+    for log in logs {
+        if let Err(e) = writeln!(file, "{}", log) {
+            return Err(format!("Failed to write to log file: {}", e));
+        }
+    }
+
+    Ok("Log written successfully".to_string())
 }
 
 pub fn read_aqua_data(path: &PathBuf) -> Result<PageData, String> {

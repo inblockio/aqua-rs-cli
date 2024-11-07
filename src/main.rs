@@ -3,7 +3,7 @@ pub mod utils;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use utils::{read_aqua_data, save_logs_to_file, save_page_data};
 use verifier::model::ResultStatusEnum;
 use verifier::verifier::{generate_aqua_chain, sign_aqua_chain, verify_aqua_chain, witness_aqua_chain};
