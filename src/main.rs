@@ -1,4 +1,3 @@
-pub mod models;
 pub mod utils;
 
 use aqua_verifier_rs_types::models::page_data::PageData;
