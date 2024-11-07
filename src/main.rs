@@ -1,9 +1,14 @@
 pub mod models;
 pub mod utils;
 
-use clap::{Command, Arg, ArgGroup, ArgAction};
-use std::path::PathBuf;
+use aqua_verifier_rs_types::models::page_data::HashChain;
+use clap::{Arg, ArgAction, ArgGroup, Command};
+use models::PageDataContainer;
 use std::fs;
+use std::path::{Path, PathBuf};
+use utils::{read_aqua_data, save_logs_to_file};
+use verifier::verifier::verify_aqua_chain;
+use verifier::model::ResultStatusEnum;
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -117,12 +122,18 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .required(true))
         .get_matches();
 
-    let verify = matches.get_one::<String>("verify").map(|p| PathBuf::from(p));
+    let verify = matches
+        .get_one::<String>("verify")
+        .map(|p| PathBuf::from(p));
     let sign = matches.get_one::<String>("sign").map(|p| PathBuf::from(p));
-    let witness = matches.get_one::<String>("witness").map(|p| PathBuf::from(p));
+    let witness = matches
+        .get_one::<String>("witness")
+        .map(|p| PathBuf::from(p));
     let file = matches.get_one::<String>("file").map(|p| PathBuf::from(p));
     let details = matches.get_flag("details");
-    let output = matches.get_one::<String>("output").map(|o| PathBuf::from(o));
+    let output = matches
+        .get_one::<String>("output")
+        .map(|o| PathBuf::from(o));
     let level = matches.get_one::<String>("level").cloned();
     let alchemy = matches.get_one::<String>("alchemy").cloned();
 
@@ -167,6 +178,8 @@ fn is_valid_output_file(s: &str) -> Result<String, String> {
 
 // Example usage in main function
 fn main() {
+    let mut logs_data: Vec<String> = Vec::new();
+
     let args = parse_args().unwrap_or_else(|err| {
         eprintln!("Error: {}", err);
         std::process::exit(1);
@@ -185,21 +198,106 @@ fn main() {
         (Some(verify_path), _, _, _) => {
             println!("Verifying file: {:?}", verify_path);
             // Verify the file
-        },
+            let res: Result<PageDataContainer, String> = read_aqua_data(&verify_path);
+            // file reading error
+            if res.is_err() {
+                logs_data.push(res.err().unwrap());
+
+                if args.output.is_some() {
+                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+
+                    if logs.is_err() {
+                        eprintln!("Error:  saving logs {}", logs.unwrap());
+                    }
+                }
+                return;
+            }
+            let aqua_page_data = res.unwrap();
+            let aqua_chain = aqua_page_data.pages.get(0);
+            if aqua_chain.is_none() {
+                logs_data.push("no aqua chain found in page data".to_string());
+                if args.output.is_some() {
+                    let logs = save_logs_to_file(logs_data, args.output.unwrap());
+
+                    if logs.is_err() {
+                        eprintln!("Error:  saving logs {}", logs.unwrap());
+                    }
+                }
+                return;
+            }
+            // aqua json file read
+            let res = verify_aqua_chain(
+                aqua_chain.unwrap().clone(),
+                args.alchemy.unwrap_or("no_key".to_string()),
+                args.level.unwrap_or("2".to_string()) == "1".to_string(),
+            );
+
+            // go through the Revision Aqua chain result
+
+            logs_data.push("Info : Looping through a revisions ".to_string());
+            for i in res.revisionResults {
+                let log_line = if i.successful {
+                    "\t Success :  Revision is succefull".to_string()
+                } else {
+                    "\t Error : Revision is not valid".to_string()
+                };
+                logs_data.push(log_line);
+
+                if i.file_verification.status == ResultStatusEnum::AVAILABLE {
+                // file verification
+                let file_verification_log = if i.file_verification.successful {
+                    "\t\t Success :  File content is succefull".to_string()
+                } else {
+                    "\t\t Error : File content is not valid".to_string()
+                };
+                logs_data.push(file_verification_log);
+
+                for ele in i.file_verification.logs {
+                    logs_data.push(format!("\t\t\t {}", ele))
+                }
+            }else{
+                logs_data.push("Info : File content not found".to_string());
+            }
+
+
+            }
+
+            let log_line = if res.successful {
+                "Success :  Validation is successful ".to_string()
+            } else {
+                "Error : Validation  failed".to_string()
+            };
+            logs_data.push(log_line);
+            return;
+        }
         (_, Some(sign_path), _, _) => {
             println!("Signing file: {:?}", sign_path);
             // Sign the file
-        },
+        }
         (_, _, Some(witness_path), _) => {
             println!("Witnessing file: {:?}", witness_path);
             // Witness the file
-        },
+        }
         (_, _, _, true) => {
             if let Some(file_path) = args.file {
-                println!("Generating aqua file from: {:?}", file_path);
+                tracing::info!("Generating aqua file from: {:?}", file_path);
                 // Generate the aqua file
+                if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str()) {
+                    let json_path = file_path.with_extension("json");
+                    match fs::write(&json_path, "{}") {
+                        Ok(_) => {
+                            println!("Generating aqua file: {:?}", json_path);
+                            // Generate the aqua file
+                        }
+                        Err(err) => {
+                            eprintln!("Error generating aqua file: {}", err);
+                        }
+                    }
+                } else {
+                    eprintln!("Error: Invalid file path provided with -f/--file");
+                }
             }
-        },
+        }
         _ => unreachable!("Clap ensures at least one operation is selected"),
     }
 }
