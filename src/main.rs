@@ -1,4 +1,5 @@
 pub mod utils;
+pub mod server;
 
 use aqua_verifier_rs_types::models::page_data::PageData;
 use clap::{Arg, ArgAction, ArgGroup, Command};
@@ -386,6 +387,15 @@ fn main() {
                     }
                 }
                 return;
+            }
+
+            match start_server().await {
+                Ok(form_data) => {
+                    println!("Received valid form data: {:?}", form_data);
+                }
+                Err(e) => {
+                    panic!("Server encountered an error: {:?}", e);
+                }
             }
 
             let res = sign_aqua_chain(aqua_chain.unwrap().clone());

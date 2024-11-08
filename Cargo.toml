@@ -5,12 +5,15 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+warp = "0.3"
+hyper = "0.14"
 futures = "0.3"
 sha3 = "0.10.8"
 serde = "1.0.210"
 serde_json_path_to_error = "0.1.4"
 verifier = { git = "https://github.com/inblockio/aqua-verifier-rs", branch = "main" }
-aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-types", branch = "main" }
+aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-types", branch = "master" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 console = "0.15"
