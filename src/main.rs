@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use utils::{read_aqua_data, save_logs_to_file, save_page_data};
 use verifier::model::ResultStatusEnum;
 use verifier::verifier::{generate_aqua_chain, sign_aqua_chain, verify_aqua_chain, witness_aqua_chain};
+use server::start_server;
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -176,7 +177,8 @@ fn is_valid_output_file(s: &str) -> Result<String, String> {
 }
 
 // Example usage in main function
-fn main() {
+#[tokio::main]
+async fn main() {
     
 
     let args = parse_args().unwrap_or_else(|err| {
@@ -362,10 +364,12 @@ fn main() {
             println!("Signing file: {:?}", sign_path);
            
             let res: Result<PageData, String> = read_aqua_data(&sign_path);
+            println!("1");
             // file reading error
             if res.is_err() {
-                logs_data.push(res.err().unwrap());
-
+                println!("2");
+                // logs_data.push(res.err().unwrap());
+                println!("3 {:#?}", res.err());
                 if args.output.is_some() {
                     let logs = save_logs_to_file(&logs_data, args.output.unwrap());
 
@@ -375,9 +379,12 @@ fn main() {
                 }
                 return;
             }
+            println!("4");
             let aqua_page_data = res.unwrap();
             let aqua_chain = aqua_page_data.pages.get(0);
+            println!("5");
             if aqua_chain.is_none() {
+                println!("6");
                 logs_data.push("no aqua chain found in page data".to_string());
                 if args.output.is_some() {
                     let logs = save_logs_to_file(&logs_data, args.output.unwrap());
@@ -388,7 +395,7 @@ fn main() {
                 }
                 return;
             }
-
+            println!("7");
             match start_server().await {
                 Ok(form_data) => {
                     println!("Received valid form data: {:?}", form_data);

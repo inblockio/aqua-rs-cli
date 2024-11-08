@@ -154,7 +154,7 @@ dependencies = [
 [[package]]
 name = "aqua-verifier-rs-types"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs-types?branch=master#c2381386d42b7b9386b02706a6418546dbc93884"
+source = "git+https://github.com/inblockio/aqua-verifier-rs-types?branch=master#a9e060e85ed7cb97b59d55f65b4e763b6a6c82fd"
 dependencies = [
  "base64 0.22.1",
  "chrono",

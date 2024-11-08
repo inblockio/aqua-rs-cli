@@ -1,21 +1,10 @@
-use warp::Filter;
-use tokio::sync::oneshot;
-use serde::Deserialize;
-use std::sync::{Arc, Mutex};
 use aqua_verifier_rs_types::models::content::RevisionContentSignature;
-// #[derive(Debug, Deserialize)]
-// struct RevisionContent {
-    // filename: String,
-    // signature: String,
-    // wallet_address: String,
-// }
+use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
+use warp::Filter;
+extern crate serde_json_path_to_error as serde_json;
 
-// #[tokio::main]
-// async fn main() {
-   
-// }
-
-async fn start_server() -> Result<RevisionContentSignature, Box<dyn std::error::Error>> {
+pub async fn start_server() -> Result<RevisionContentSignature, Box<dyn std::error::Error>> {
     let port = 3030;
 
     // Check if port is available
@@ -78,55 +67,65 @@ async fn start_server() -> Result<RevisionContentSignature, Box<dyn std::error::
     </html>
     "#;
 
-    // Define the route for serving HTML content
+    // Define routes
     let html_route = warp::path::end().map(move || warp::reply::html(html_content));
 
-    // Define the route for handling form submissions
     let submit_route = warp::post()
         .and(warp::path("submit"))
         .and(warp::body::form())
-        .and_then(move |form_data: std::collections::HashMap<String, String>| {
-            let form_data_clone = Arc::clone(&form_data_clone);
+        .and_then(
+            move |form_data: std::collections::HashMap<String, String>| {
+                let form_data_clone = Arc::clone(&form_data_clone);
+                async move {
+                    if let (Some(filename), Some(signature), Some(wallet_address)) = (
+                        form_data.get("filename"),
+                        form_data.get("signature"),
+                        form_data.get("wallet_address"),
+                    ) {
+                        let mut data = form_data_clone.lock().unwrap();
+                        *data = Some(RevisionContentSignature {
+                            filename: filename.clone(),
+                            signature: signature.clone(),
+                            wallet_address: wallet_address.clone(),
+                        });
 
-            async move {
-                // Extract form fields and check if valid
-                if let (Some(filename), Some(signature), Some(wallet_address)) = (
-                    form_data.get("filename"),
-                    form_data.get("signature"),
-                    form_data.get("wallet_address"),
-                ) {
-                    // Store valid form data in the shared variable
-                    let mut data = form_data_clone.lock().unwrap();
-                    *data = Some(RevisionContentSignature {
-                        filename: filename.clone(),
-                        signature: signature.clone(),
-                        wallet_address: wallet_address.clone(),
-                    });
-
-                    let response = warp::reply::json(&serde_json::json!({
-                        "status": "success",
-                        "message": "Signature received",
-                        "file": filename,
-                        "wallet_address": wallet_address
-                    }));
-                    Ok::<_, warp::Rejection>(response)
-                } else {
-                    // Handle invalid form data by returning an error response
-                    Err(warp::reject::custom(ServerError("Invalid form data".into())))
+                        let response = warp::reply::json(&serde_json::json!({
+                            "status": "success",
+                            "message": "Signature received",
+                            "file": filename,
+                            "wallet_address": wallet_address
+                        }));
+                        Ok::<_, warp::Rejection>(response)
+                    } else {
+                        Err(warp::reject::custom(ServerError(
+                            "Invalid form data".into(),
+                        )))
+                    }
                 }
-            }
-        });
+            },
+        );
 
     let routes = html_route.or(submit_route);
 
-    // Start the server in a separate async task so it can be closed on form submission
+    // Start the server with graceful shutdown handling
     let (tx, rx) = oneshot::channel::<()>();
-    let server = warp::serve(routes).bind_with_graceful_shutdown(([127, 0, 0, 1], port), async {
-        rx.await.ok();
-    });
 
-    // Spawn the server as an async task
-    tokio::spawn(server);
+    println!("Spawnign a sserver");
+    // tokio::spawn(async move {
+    //     warp::serve(routes)
+    //         .bind_with_graceful_shutdown(([127, 0, 0, 1], port), async { rx.await.ok(); });
+    // });
+
+    tokio::spawn(async move {
+        // Start the server with graceful shutdown handling
+        let server_future =
+            warp::serve(routes).bind_with_graceful_shutdown(([127, 0, 0, 1], port), async {
+                rx.await.ok(); // Await the shutdown signal
+            });
+
+        // Await the server future to ensure it runs
+        server_future.await.unwrap(); // Handle any potential errors
+    });
 
     // Wait for valid form submission and close the server
     loop {
@@ -135,7 +134,6 @@ async fn start_server() -> Result<RevisionContentSignature, Box<dyn std::error::
             return Ok(data); // Return valid form data
         }
 
-        // Small delay to prevent busy-waiting
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 }
@@ -147,5 +145,6 @@ struct ServerError(String);
 impl warp::reject::Reject for ServerError {}
 
 fn is_port_available(port: u16) -> bool {
+    println!("Port is available");
     std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
