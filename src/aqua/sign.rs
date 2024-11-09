@@ -1,8 +1,11 @@
 use std::path::PathBuf;
 
+use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
+use verifier::verifier::sign_aqua_chain;
 use verifier::{aqua_verifier_struct_impl::AquaVerifier, verifier::witness_aqua_chain};
 
+use crate::aqua::server::sign_message_server;
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 
