@@ -65,3 +65,32 @@ pub fn save_page_data(aqua_page_data: &PageData, original_path: &Path, extension
         Err(e) => Err(format!("Error serializing PageData: {}", e)),
     }
 }
+
+
+
+pub fn is_valid_json_file(s: &str) -> Result<String, String> {
+    let path = PathBuf::from(s);
+    if path.exists() && path.is_file() && path.extension().unwrap_or_default() == "json" {
+        Ok(s.to_string())
+    } else {
+        Err("Invalid JSON file path".to_string())
+    }
+}
+
+pub fn is_valid_file(s: &str) -> Result<String, String> {
+    let path = PathBuf::from(s);
+    if path.exists() && path.is_file() {
+        Ok(s.to_string())
+    } else {
+        Err("Invalid file path".to_string())
+    }
+}
+
+pub fn is_valid_output_file(s: &str) -> Result<String, String> {
+    let lowercase = s.to_lowercase();
+    if lowercase.ends_with(".json") || lowercase.ends_with(".html") || lowercase.ends_with(".pdf") {
+        Ok(s.to_string())
+    } else {
+        Err("Output file must be .json, .html, or .pdf".to_string())
+    }
+}

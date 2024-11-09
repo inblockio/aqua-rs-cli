@@ -1,18 +1,23 @@
-pub mod utils;
 pub mod aqua;
+pub mod models;
+pub mod utils;
 
-use aqua_verifier_rs_types::models::content::RevisionContentSignature;
+use crate::models::CliArgs;
+use aqua::gen_aqua_file::cli_generate_aqua_chain;
+use aqua::server::sign_message_server;
+use aqua::sign::cli_sign_chain;
+use aqua::verify::cli_verify_chain;
+use aqua::witness::cli_winess_chain;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use clap::{Arg, ArgAction, ArgGroup, Command};
-use aqua::server::sign_message_server;
-use aqua::gen_aqua_file::generate_aqua_chain_file;
 use std::path::PathBuf;
-use utils::{read_aqua_data, save_logs_to_file, save_page_data};
+use utils::{
+    is_valid_file, is_valid_json_file, is_valid_output_file, read_aqua_data, save_logs_to_file,
+    save_page_data,
+};
 use verifier::aqua_verifier_struct_impl::{AquaVerifier, VerificationOptions};
 use verifier::model::ResultStatusEnum;
-use verifier::verifier::{
-     sign_aqua_chain, verify_aqua_chain, witness_aqua_chain,
-};
+use verifier::verifier::{sign_aqua_chain, verify_aqua_chain};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -51,18 +56,6 @@ SUMMARY
    aquq-cli expects ateast parameter -s,-v,-w or -f.
 
 For more information, visit: https://github.com/inblockio/aqua-verifier-cli"#;
-
-#[derive(Debug)]
-pub struct CliArgs {
-    pub verify: Option<PathBuf>,
-    pub sign: Option<PathBuf>,
-    pub witness: Option<PathBuf>,
-    pub file: Option<PathBuf>,
-    pub details: bool,
-    pub output: Option<PathBuf>,
-    pub level: Option<String>,
-    pub alchemy: Option<String>,
-}
 
 pub fn parse_args() -> Result<CliArgs, String> {
     let matches = Command::new("aqua-cli")
@@ -141,6 +134,19 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let level = matches.get_one::<String>("level").cloned();
     let alchemy = matches.get_one::<String>("alchemy").cloned();
 
+    // Ensure only one of -v, -s, or -w is selected
+    let operations_selected = [verify.is_some(), sign.is_some(), witness.is_some()]
+        .iter()
+        .filter(|&&x| x)
+        .count();
+
+    if operations_selected > 1 {
+        return Err(
+            "Error: You can only use one of --verify, --sign, or --witness independently."
+                .to_string(),
+        );
+    }
+
     Ok(CliArgs {
         verify,
         sign,
@@ -153,37 +159,10 @@ pub fn parse_args() -> Result<CliArgs, String> {
     })
 }
 
-fn is_valid_json_file(s: &str) -> Result<String, String> {
-    let path = PathBuf::from(s);
-    if path.exists() && path.is_file() && path.extension().unwrap_or_default() == "json" {
-        Ok(s.to_string())
-    } else {
-        Err("Invalid JSON file path".to_string())
-    }
-}
-
-fn is_valid_file(s: &str) -> Result<String, String> {
-    let path = PathBuf::from(s);
-    if path.exists() && path.is_file() {
-        Ok(s.to_string())
-    } else {
-        Err("Invalid file path".to_string())
-    }
-}
-
-fn is_valid_output_file(s: &str) -> Result<String, String> {
-    let lowercase = s.to_lowercase();
-    if lowercase.ends_with(".json") || lowercase.ends_with(".html") || lowercase.ends_with(".pdf") {
-        Ok(s.to_string())
-    } else {
-        Err("Output file must be .json, .html, or .pdf".to_string())
-    }
-}
-
 // Example usage in main function
 // #[tokio::main]
 fn main() {
-    let option =VerificationOptions{
+    let option = VerificationOptions {
         version: 1.2,
         strict: false,
         allow_null: false,
@@ -197,7 +176,7 @@ fn main() {
         std::process::exit(1);
     });
 
-    // Example validation of combined flags
+    // validation of combined flags
     if args.verify.is_some() || args.sign.is_some() || args.witness.is_some() {
         if args.file.is_some() {
             eprintln!("Error: -f/--file cannot be used with -v, -s, or -w");
@@ -206,358 +185,22 @@ fn main() {
     }
 
     // Process the arguments based on the combination
-    match (args.verify, args.sign, args.witness, args.file.is_some()) {
-        (Some(verify_path), _, _, _) => {
-            let mut logs_data: Vec<String> = Vec::new();
-
-            println!("Verifying file: {:?}", verify_path);
-            // Verify the file
-            let res: Result<PageData, String> = read_aqua_data(&verify_path);
-            // file reading error
-            if res.is_err() {
-                logs_data.push(res.err().unwrap());
-
-                if args.output.is_some() {
-                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-
-                    if logs.is_err() {
-                        eprintln!("Error:  saving logs {}", logs.unwrap());
-                    }
-                }
-                return;
-            }
-            let aqua_page_data = res.unwrap();
-            let aqua_chain = aqua_page_data.pages.get(0);
-            if aqua_chain.is_none() {
-                logs_data.push("no aqua chain found in page data".to_string());
-                if args.output.is_some() {
-                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-
-                    if logs.is_err() {
-                        eprintln!("Error:  saving logs {}", logs.unwrap());
-                    }
-                }
-                return;
-            }
-            // aqua json file read
-            let res = verify_aqua_chain(
-                aqua_chain.unwrap().clone(),
-                args.alchemy.unwrap_or("no_key".to_string()),
-                args.level.unwrap_or("2".to_string()) == "1".to_string(),
-            );
-
-            // go through the Revision Aqua chain result
-
-            logs_data.push("Info : Looping through a revisions ".to_string());
-            for i in res.revisionResults {
-                let log_line = if i.successful {
-                    "\t Success :  Revision is succefull".to_string()
-                } else {
-                    "\t Error : Revision is not valid".to_string()
-                };
-                logs_data.push(log_line);
-
-                // file verification
-                if i.file_verification.status == ResultStatusEnum::AVAILABLE {
-                    let file_verification_log = if i.file_verification.successful {
-                        "\t\t Success :  File verification is succefull".to_string()
-                    } else {
-                        "\t\t Error : File verification failed".to_string()
-                    };
-                    logs_data.push(file_verification_log);
-
-                    for ele in i.file_verification.logs {
-                        logs_data.push(format!("\t\t\t {}", ele))
-                    }
-                } else {
-                    logs_data.push("Info : File verification not found".to_string());
-                }
-
-                // content verification
-                if i.content_verification.status == ResultStatusEnum::AVAILABLE {
-                    let content_verification_log = if i.content_verification.successful {
-                        "\t\t Success : Content verification is succefull".to_string()
-                    } else {
-                        "\t\t Error : Content verification is not valid".to_string()
-                    };
-                    logs_data.push(content_verification_log);
-
-                    for ele in i.content_verification.logs {
-                        logs_data.push(format!("\t\t\t {}", ele))
-                    }
-                } else {
-                    logs_data.push("Info : content verification not found".to_string());
-                }
-
-                // metadata verification
-                if i.metadata_verification.status == ResultStatusEnum::AVAILABLE {
-                    let metadata_verification_log = if i.metadata_verification.successful {
-                        "\t\t Success : metadata verification is succefull".to_string()
-                    } else {
-                        "\t\t Error : metadata verification is not valid".to_string()
-                    };
-                    logs_data.push(metadata_verification_log);
-
-                    for ele in i.metadata_verification.logs {
-                        logs_data.push(format!("\t\t\t {}", ele))
-                    }
-                } else {
-                    logs_data.push("Info : metadata verification not found".to_string());
-                }
-
-                //witness verification
-                if i.witness_verification.status == ResultStatusEnum::AVAILABLE {
-                    let witness_verification_log = if i.witness_verification.successful {
-                        "\t\t Success : witness verification is succefull".to_string()
-                    } else {
-                        "\t\t Error : witness verification is not valid".to_string()
-                    };
-                    logs_data.push(witness_verification_log);
-
-                    for ele in i.witness_verification.logs {
-                        logs_data.push(format!("\t\t\t {}", ele))
-                    }
-                } else {
-                    logs_data.push("Info : witness verification not found".to_string());
-                }
-
-                //signature verification
-                if i.signature_verification.status == ResultStatusEnum::AVAILABLE {
-                    let signature_verification_log = if i.signature_verification.successful {
-                        "\t\t Success : signature verification is succefull".to_string()
-                    } else {
-                        "\t\t Error : signature verification is not valid".to_string()
-                    };
-                    logs_data.push(signature_verification_log);
-
-                    for ele in i.signature_verification.logs {
-                        logs_data.push(format!("\t\t\t {}", ele))
-                    }
-                } else {
-                    logs_data.push("Info : signature verification not found".to_string());
-                }
-
-                logs_data.push(
-                    "Info : ============= Proceeding to the next revision ============="
-                        .to_string(),
-                );
-            }
-
-            let log_line = if res.successful {
-                "Success :  Validation is successful ".to_string()
-            } else {
-                "Error : Validation  failed".to_string()
-            };
-            logs_data.push(log_line);
-
-            //if verbose print out the logs if not print the last line
-            if args.details {
-                for item in logs_data.clone() {
-                    println!("{}", item);
-                }
-            } else {
-                println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
-            }
-
-            // if output is specified save the logs
-            if args.output.is_some() {
-                let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-                if logs.is_err() {
-                    eprintln!("Error:  saving logs {}", logs.unwrap());
-                }
-            }
-
-            return;
-        }
-        (_, Some(sign_path), _, _) => {
-            let mut logs_data: Vec<String> = Vec::new();
-
-            println!("Signing file: {:?}", sign_path);
-
-            let res: Result<PageData, String> = read_aqua_data(&sign_path);
-            println!("1");
-            // file reading error
-            if res.is_err() {
-                println!("2");
-                // logs_data.push(res.err().unwrap());
-                println!("3 {:#?}", res.err());
-                if args.output.is_some() {
-                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-
-                    if logs.is_err() {
-                        eprintln!("Error:  saving logs {}", logs.unwrap());
-                    }
-                }
-                return;
-            }
-            println!("4");
-            let aqua_page_data = res.unwrap();
-            let aqua_chain_option = aqua_page_data.pages.get(0);
-            println!("5");
-            if aqua_chain_option.is_none() {
-                println!("6");
-                logs_data.push("no aqua chain found in page data".to_string());
-                if args.output.is_some() {
-                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-
-                    if logs.is_err() {
-                        eprintln!("Error:  saving logs {}", logs.unwrap());
-                    }
-                }
-                return;
-            }
-
-            let aqua_chain = aqua_chain_option.unwrap();
-
-            let genesis_hash_revision_option = aqua_chain.revisions.get(0);
-
-            if genesis_hash_revision_option.is_none() {
-                println!("Error fetching genesis revsion");
-                panic!("Aqua cli encountered an error")
-            }
-
-            let (_genesis_hash, genesis_revision) = genesis_hash_revision_option.unwrap();
-            println!("7");
-            // Create a new tokio runtime
-            let runtime_result = tokio::runtime::Runtime::new().map_err(|e| e.to_string());
-
-            if runtime_result.is_err() {
-                println!(
-                    "Error initializing tokio runtime {:#?}",
-                    runtime_result.err()
-                );
-                panic!("Aqua cli encountered an error")
-            }
-
-            let runtime = runtime_result.unwrap();
-
-            // Run the async server in the runtime
-            let result =
-                runtime.block_on(async { sign_message_server("test_message".to_string()).await });
-
-            if result.is_err() {
-                println!("Signing failed: {:#?}", result.err());
-                panic!("Aqua cli encountered an error")
-            }
-            let auth_payload = result.unwrap();
-            println!("Authentication successful!");
-            println!("Signature: {}", auth_payload.signature);
-            println!("Public Key: {}", auth_payload.public_key);
-            println!("Wallet Address: {}", auth_payload.wallet_address);
-
-            let rev_sig = RevisionContentSignature {
-                signature: auth_payload.signature,
-                wallet_address: auth_payload.wallet_address,
-                filename: genesis_revision
-                    .content.clone()
-                    .file
-                    .expect("Expected to find file name in genesis reviion")
-                    .filename.clone(),
-            };
-
-            let res = sign_aqua_chain(aqua_chain.clone(), rev_sig);
-
-            let log_line = if res.is_ok() {
-                "Success :  Signing Aqua chain is successful ".to_string()
-            } else {
-                "Error : Signing Aqua chain  failed".to_string()
-            };
-            logs_data.push(log_line);
-
-            if let Err(e) = save_page_data(&aqua_page_data, &sign_path, ".signed.json".to_string())
-            {
-                logs_data.push(format!("Error saving page data: {}", e));
-            }
-
-            //if verbose print out the logs if not print the last line
-            if args.details {
-                for item in logs_data.clone() {
-                    println!("{}", item);
-                }
-            } else {
-                println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
-            }
-
-            // if output is specified save the logs
-            if args.output.is_some() {
-                let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-                if logs.is_err() {
-                    eprintln!("Error:  saving logs {}", logs.unwrap());
-                }
-            }
-
-            return;
-        }
+    match (
+        args.clone().verify,
+        args.clone().sign,
+        args.clone().witness,
+        args.clone().file.is_some(),
+    ) {
+        (Some(verify_path), _, _, _) => cli_verify_chain(args, aqua_verifier, verify_path),
+        (_, Some(sign_path), _, _) => cli_sign_chain(args, aqua_verifier, sign_path),
         (_, _, Some(witness_path), _) => {
-            let mut logs_data: Vec<String> = Vec::new();
-
-            println!("Witnessing file: {:?}", witness_path);
-            // Witness the file
-
-            let res: Result<PageData, String> = read_aqua_data(&witness_path);
-            // file reading error
-            if res.is_err() {
-                logs_data.push(res.err().unwrap());
-
-                if args.output.is_some() {
-                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-
-                    if logs.is_err() {
-                        eprintln!("Error:  saving logs {}", logs.unwrap());
-                    }
-                }
-                return;
-            }
-            let aqua_page_data = res.unwrap();
-            let aqua_chain = aqua_page_data.pages.get(0);
-            if aqua_chain.is_none() {
-                logs_data.push("no aqua chain found in page data".to_string());
-                if args.output.is_some() {
-                    let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-
-                    if logs.is_err() {
-                        eprintln!("Error:  saving logs {}", logs.unwrap());
-                    }
-                }
-                return;
-            }
-
-            let res = witness_aqua_chain(aqua_chain.unwrap().clone());
-
-            let log_line = if res.is_ok() {
-                "Success :  Witnessing Aqua chain is successful ".to_string()
-            } else {
-                "Error : Witnessing Aqua chain  failed".to_string()
-            };
-            logs_data.push(log_line);
-
-            // In your main code, replace the TODO with:
-            if let Err(e) =
-                save_page_data(&aqua_page_data, &witness_path, ".witness.json".to_string())
-            {
-                logs_data.push(format!("Error saving page data: {}", e));
-            }
-
-            //if verbose print out the logs if not print the last line
-            if args.details {
-                for item in logs_data.clone() {
-                    println!("{}", item);
-                }
-            } else {
-                println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
-            }
-
-            // if output is specified save the logs
-            if args.output.is_some() {
-                let logs = save_logs_to_file(&logs_data, args.output.unwrap());
-                if logs.is_err() {
-                    eprintln!("Error:  saving logs {}", logs.unwrap());
-                }
-            }
+            cli_winess_chain(args.clone(), aqua_verifier, witness_path);
         }
         (_, _, _, true) => {
-            generate_aqua_chain_file(args , aqua_verifier);
+            cli_generate_aqua_chain(args.clone(), aqua_verifier);
         }
-        _ => unreachable!("Unable to determin course of action **Clap ensures at least one operation is selected"),
+        _ => unreachable!(
+            "Unable to determin course of action **Clap ensures at least one operation is selected"
+        ),
     }
 }

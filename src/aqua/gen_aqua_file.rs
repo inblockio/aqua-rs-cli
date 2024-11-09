@@ -2,13 +2,13 @@ use std::fs;
 
 
 use verifier::aqua_verifier_struct_impl::AquaVerifier;
-
-use crate::{CliArgs, utils::save_logs_to_file};
-
-
+use crate::models::CliArgs;
+use crate::utils::save_logs_to_file;
 
 
-pub fn generate_aqua_chain_file(args : CliArgs, aqua_verifier : AquaVerifier){
+
+
+pub fn cli_generate_aqua_chain(args : CliArgs, aqua_verifier : AquaVerifier){
 
  let mut logs_data: Vec<String> = Vec::new();
 

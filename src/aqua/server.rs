@@ -27,8 +27,7 @@ struct ResponseMessage {
 // Changed to use Default derive
 #[derive(Debug, Default)]
 struct AppState {
-    message: Mutex<String>,
-    counter: Mutex<i32>,
+    message: Mutex<String>
 }
 
 async fn get_sign_message(data: web::Data<AppState>) -> Result<HttpResponse, Error> {
@@ -67,13 +66,12 @@ async fn handle_auth(
 }
 
 // #[actix_web::main]
-pub async fn sign_message_server(message: String) -> Result<AuthPayload, String> {
+pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, String> {
     env_logger::init();
 
     // Initialize state with default values
     let app_state = web::Data::new(AppState {
-        counter: Mutex::new(0),
-        message: Mutex::new("kenn".to_string()),
+        message: Mutex::new(message_par),
     });
 
     let (tx, rx) = mpsc::channel::<AuthPayload>();
