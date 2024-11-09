@@ -1,14 +1,18 @@
+pub mod sign_message_server;
 pub mod utils;
-pub mod server;
 
+use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use clap::{Arg, ArgAction, ArgGroup, Command};
+use sign_message_server::{sign_message_server, AuthPayload};
 use std::fs;
 use std::path::PathBuf;
 use utils::{read_aqua_data, save_logs_to_file, save_page_data};
+use verifier::aqua_verifier_struct_impl::{AquaVerifier, VerificationOptions};
 use verifier::model::ResultStatusEnum;
-use verifier::verifier::{generate_aqua_chain, sign_aqua_chain, verify_aqua_chain, witness_aqua_chain};
-use server::start_server;
+use verifier::verifier::{
+    generate_aqua_chain, sign_aqua_chain, verify_aqua_chain, witness_aqua_chain,
+};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -177,9 +181,16 @@ fn is_valid_output_file(s: &str) -> Result<String, String> {
 }
 
 // Example usage in main function
-#[tokio::main]
-async fn main() {
-    
+// #[tokio::main]
+fn main() {
+    let option =VerificationOptions{
+        version: 1.2,
+        strict: false,
+        allow_null: false,
+        alchemy_key: String::new(),
+        do_alchemy_key_lookup: false,
+    };
+    let aqua_verifier = AquaVerifier::new(Some(option));
 
     let args = parse_args().unwrap_or_else(|err| {
         eprintln!("Error: {}", err);
@@ -362,7 +373,7 @@ async fn main() {
             let mut logs_data: Vec<String> = Vec::new();
 
             println!("Signing file: {:?}", sign_path);
-           
+
             let res: Result<PageData, String> = read_aqua_data(&sign_path);
             println!("1");
             // file reading error
@@ -381,9 +392,9 @@ async fn main() {
             }
             println!("4");
             let aqua_page_data = res.unwrap();
-            let aqua_chain = aqua_page_data.pages.get(0);
+            let aqua_chain_option = aqua_page_data.pages.get(0);
             println!("5");
-            if aqua_chain.is_none() {
+            if aqua_chain_option.is_none() {
                 println!("6");
                 logs_data.push("no aqua chain found in page data".to_string());
                 if args.output.is_some() {
@@ -395,17 +406,56 @@ async fn main() {
                 }
                 return;
             }
-            println!("7");
-            match start_server().await {
-                Ok(form_data) => {
-                    println!("Received valid form data: {:?}", form_data);
-                }
-                Err(e) => {
-                    panic!("Server encountered an error: {:?}", e);
-                }
+
+            let aqua_chain = aqua_chain_option.unwrap();
+
+            let genesis_hash_revision_option = aqua_chain.revisions.get(0);
+
+            if genesis_hash_revision_option.is_none() {
+                println!("Error fetching genesis revsion");
+                panic!("Aqua cli encountered an error")
             }
 
-            let res = sign_aqua_chain(aqua_chain.unwrap().clone());
+            let (_genesis_hash, genesis_revision) = genesis_hash_revision_option.unwrap();
+            println!("7");
+            // Create a new tokio runtime
+            let runtime_result = tokio::runtime::Runtime::new().map_err(|e| e.to_string());
+
+            if runtime_result.is_err() {
+                println!(
+                    "Error initializing tokio runtime {:#?}",
+                    runtime_result.err()
+                );
+                panic!("Aqua cli encountered an error")
+            }
+
+            let runtime = runtime_result.unwrap();
+
+            // Run the async server in the runtime
+            let result =
+                runtime.block_on(async { sign_message_server("test_message".to_string()).await });
+
+            if result.is_err() {
+                println!("Signing failed: {:#?}", result.err());
+                panic!("Aqua cli encountered an error")
+            }
+            let auth_payload = result.unwrap();
+            println!("Authentication successful!");
+            println!("Signature: {}", auth_payload.signature);
+            println!("Public Key: {}", auth_payload.public_key);
+            println!("Wallet Address: {}", auth_payload.wallet_address);
+
+            let rev_sig = RevisionContentSignature {
+                signature: auth_payload.signature,
+                wallet_address: auth_payload.wallet_address,
+                filename: genesis_revision
+                    .content.clone()
+                    .file
+                    .expect("Expected to find file name in genesis reviion")
+                    .filename.clone(),
+            };
+
+            let res = sign_aqua_chain(aqua_chain.clone(), rev_sig);
 
             let log_line = if res.is_ok() {
                 "Success :  Signing Aqua chain is successful ".to_string()
@@ -414,8 +464,8 @@ async fn main() {
             };
             logs_data.push(log_line);
 
-           
-            if let Err(e) = save_page_data(&aqua_page_data, &sign_path, ".signed.json".to_string()) {
+            if let Err(e) = save_page_data(&aqua_page_data, &sign_path, ".signed.json".to_string())
+            {
                 logs_data.push(format!("Error saving page data: {}", e));
             }
 
@@ -443,7 +493,6 @@ async fn main() {
 
             println!("Witnessing file: {:?}", witness_path);
             // Witness the file
-
 
             let res: Result<PageData, String> = read_aqua_data(&witness_path);
             // file reading error
@@ -473,7 +522,7 @@ async fn main() {
                 return;
             }
 
-            let res = witness_aqua_chain(aqua_chain.unwrap().clone(),);
+            let res = witness_aqua_chain(aqua_chain.unwrap().clone());
 
             let log_line = if res.is_ok() {
                 "Success :  Witnessing Aqua chain is successful ".to_string()
@@ -483,7 +532,9 @@ async fn main() {
             logs_data.push(log_line);
 
             // In your main code, replace the TODO with:
-            if let Err(e) = save_page_data(&aqua_page_data, &witness_path, ".witness.json".to_string()) {
+            if let Err(e) =
+                save_page_data(&aqua_page_data, &witness_path, ".witness.json".to_string())
+            {
                 logs_data.push(format!("Error saving page data: {}", e));
             }
 
@@ -503,7 +554,6 @@ async fn main() {
                     eprintln!("Error:  saving logs {}", logs.unwrap());
                 }
             }
-
         }
         (_, _, _, true) => {
             let mut logs_data: Vec<String> = Vec::new();
