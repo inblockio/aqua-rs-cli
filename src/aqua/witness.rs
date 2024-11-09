@@ -6,7 +6,7 @@ use verifier::{aqua_verifier_struct_impl::AquaVerifier, verifier::witness_aqua_c
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 
-pub fn  cli_winess_chain(args : CliArgs, aqua_verifier : AquaVerifier, witness_path : PathBuf){
+pub fn  cli_winess_chain(args : CliArgs, _aqua_verifier : AquaVerifier, witness_path : PathBuf){
     let mut logs_data: Vec<String> = Vec::new();
 
     println!("Witnessing file: {:?}", witness_path);

@@ -3,12 +3,11 @@ use std::path::PathBuf;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use verifier::model::ResultStatusEnum;
 use verifier::verifier::verify_aqua_chain;
-use verifier::{aqua_verifier_struct_impl::AquaVerifier, verifier::witness_aqua_chain};
-
+use verifier::aqua_verifier_struct_impl::AquaVerifier ;
 use crate::models::CliArgs;
-use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
+use crate::utils::{read_aqua_data, save_logs_to_file};
 
-pub fn  cli_verify_chain(args : CliArgs, aqua_verifier : AquaVerifier, verify_path : PathBuf){
+pub fn  cli_verify_chain(args : CliArgs, _aqua_verifier : AquaVerifier, verify_path : PathBuf){
 
     let mut logs_data: Vec<String> = Vec::new();
 

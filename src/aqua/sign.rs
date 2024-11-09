@@ -3,13 +3,12 @@ use std::path::PathBuf;
 use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use verifier::verifier::sign_aqua_chain;
-use verifier::{aqua_verifier_struct_impl::AquaVerifier, verifier::witness_aqua_chain};
-
+use verifier::aqua_verifier_struct_impl::AquaVerifier;
 use crate::aqua::server::sign_message_server;
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 
-pub fn  cli_sign_chain(args : CliArgs, aqua_verifier : AquaVerifier, sign_path : PathBuf){
+pub fn  cli_sign_chain(args : CliArgs, _aqua_verifier : AquaVerifier, sign_path : PathBuf){
     let mut logs_data: Vec<String> = Vec::new();
 
     println!("Signing file: {:?}", sign_path);

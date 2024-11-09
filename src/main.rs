@@ -4,20 +4,16 @@ pub mod utils;
 
 use crate::models::CliArgs;
 use aqua::gen_aqua_file::cli_generate_aqua_chain;
-use aqua::server::sign_message_server;
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
-use aqua_verifier_rs_types::models::page_data::PageData;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use std::path::PathBuf;
 use utils::{
-    is_valid_file, is_valid_json_file, is_valid_output_file, read_aqua_data, save_logs_to_file,
-    save_page_data,
+    is_valid_file, is_valid_json_file, is_valid_output_file,  
 };
 use verifier::aqua_verifier_struct_impl::{AquaVerifier, VerificationOptions};
-use verifier::model::ResultStatusEnum;
-use verifier::verifier::{sign_aqua_chain, verify_aqua_chain};
+
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 

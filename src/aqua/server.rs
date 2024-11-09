@@ -2,7 +2,7 @@ use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
 use serde::{Deserialize, Serialize};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
