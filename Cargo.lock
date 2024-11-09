@@ -5047,7 +5047,7 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 [[package]]
 name = "verifier"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#e228ccab9011e7243b2c54aa689cecc83147fd0b"
+source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#63b2b5b6587884500b384e562548a0d9855e0443"
 dependencies = [
  "aqua-verifier-rs-types",
  "async-trait",
