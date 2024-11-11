@@ -6,27 +6,10 @@ use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AuthPayload {
-   pub signature: String,
-   pub  public_key: String,
-   pub  wallet_address: String,
-}
-
-#[derive(Debug, Serialize)]
-struct SignMessage {
-    message: String,
-    nonce: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ResponseMessage {
-    status: String,
-}
 
 // Changed to use Default derive
 #[derive(Debug, Default)]
-struct AppState {
+struct AppStateServerWitness {
     message: Mutex<String>
 }
 
@@ -70,7 +53,7 @@ pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, Str
     env_logger::init();
 
     // Initialize state with default values
-    let app_state = web::Data::new(AppState {
+    let app_state = web::Data::new(AppStateServerWitness {
         message: Mutex::new(message_par),
     });
 
@@ -95,7 +78,7 @@ pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, Str
             .app_data(web::JsonConfig::default().limit(4096))
             .service(web::resource("/message").route(web::get().to(get_sign_message)))
             .service(web::resource("/auth").route(web::post().to(handle_auth)))
-            .service(Files::new("/", "./static").index_file("index.html"))
+            .service(Files::new("/", "./static").index_file("witness.html"))
     })
     .bind("127.0.0.1:8080");
     

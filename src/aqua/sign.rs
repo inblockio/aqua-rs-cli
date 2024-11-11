@@ -2,13 +2,12 @@ use std::path::PathBuf;
 
 use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
-use verifier::verifier::sign_aqua_chain;
-use verifier::aqua_verifier_struct_impl::AquaVerifier;
-use crate::server::sign_message_server;
+use verifier::aqua_verifier::AquaVerifier;
+use crate::server_sign::sign_message_server;
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 
-pub fn  cli_sign_chain(args : CliArgs, _aqua_verifier : AquaVerifier, sign_path : PathBuf){
+pub fn  cli_sign_chain(args : CliArgs, aqua_verifier : AquaVerifier, sign_path : PathBuf){
     let mut logs_data: Vec<String> = Vec::new();
 
     println!("Signing file: {:?}", sign_path);
@@ -95,6 +94,7 @@ pub fn  cli_sign_chain(args : CliArgs, _aqua_verifier : AquaVerifier, sign_path 
     let rev_sig = RevisionContentSignature {
         signature: auth_payload.signature,
         wallet_address: auth_payload.wallet_address,
+        publickey : auth_payload.public_key,
         filename: genesis_revision
             .content.clone()
             .file
@@ -102,7 +102,7 @@ pub fn  cli_sign_chain(args : CliArgs, _aqua_verifier : AquaVerifier, sign_path 
             .filename.clone(),
     };
 
-    let res = sign_aqua_chain(aqua_chain.clone(), rev_sig);
+    let res = aqua_verifier.sign_aqua_chain(aqua_page_data.clone(), rev_sig);
 
     let log_line = if res.is_ok() {
         "Success :  Signing Aqua chain is successful ".to_string()

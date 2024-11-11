@@ -12,3 +12,22 @@ pub struct CliArgs {
     pub level: Option<String>,
     pub alchemy: Option<String>,
 }
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AuthPayload {
+   pub signature: String,
+   pub  public_key: String,
+   pub  wallet_address: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SignMessage {
+    pub message: String,
+    pub nonce: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ResponseMessage {
+    pub status: String,
+}

@@ -1,7 +1,7 @@
 use std::fs;
 
 
-use verifier::aqua_verifier_struct_impl::AquaVerifier;
+use verifier::aqua_verifier::AquaVerifier;
 use crate::models::CliArgs;
 use crate::utils::{ save_logs_to_file, save_page_data};
 

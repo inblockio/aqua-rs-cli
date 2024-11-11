@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use verifier::model::ResultStatusEnum;
 use verifier::verifier::verify_aqua_chain;
-use verifier::{aqua_verifier_struct_impl::AquaVerifier};
+use verifier::aqua_verifier::AquaVerifier;
 
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file};

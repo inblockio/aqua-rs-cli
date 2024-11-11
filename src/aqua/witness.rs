@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
 use aqua_verifier_rs_types::models::page_data::PageData;
-use verifier::{aqua_verifier_struct_impl::AquaVerifier, verifier::witness_aqua_chain};
+use verifier::aqua_verifier::AquaVerifier;
 
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 
-pub fn  cli_winess_chain(args : CliArgs, _aqua_verifier : AquaVerifier, witness_path : PathBuf){
+pub fn  cli_winess_chain(args : CliArgs, aqua_verifier : AquaVerifier, witness_path : PathBuf){
     let mut logs_data: Vec<String> = Vec::new();
 
     println!("Witnessing file: {:?}", witness_path);
@@ -40,7 +40,7 @@ pub fn  cli_winess_chain(args : CliArgs, _aqua_verifier : AquaVerifier, witness_
         return;
     }
 
-    let res = witness_aqua_chain(aqua_chain.unwrap().clone());
+    let res = aqua_verifier.witness_aqua_chain(aqua_chain.unwrap().clone());
 
     let log_line = if res.is_ok() {
         "Success :  Witnessing Aqua chain is successful ".to_string()

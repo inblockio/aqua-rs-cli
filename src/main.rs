@@ -1,7 +1,8 @@
 pub mod aqua;
 pub mod models;
 pub mod utils;
-pub mod server;
+pub mod server_sign;
+pub mod server_witness;
 
 use crate::models::CliArgs;
 use aqua::gen_aqua_file::cli_generate_aqua_chain;
@@ -14,7 +15,7 @@ use std::{env, path::PathBuf};
 use utils::{
     is_valid_file, is_valid_json_file, is_valid_output_file, string_to_bool,  
 };
-use verifier::aqua_verifier_struct_impl::{AquaVerifier, VerificationOptions};
+use verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
 
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL

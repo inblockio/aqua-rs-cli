@@ -399,7 +399,7 @@ dependencies = [
 [[package]]
 name = "aqua-verifier-rs-types"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs-types?branch=master#a9e060e85ed7cb97b59d55f65b4e763b6a6c82fd"
+source = "git+https://github.com/inblockio/aqua-verifier-rs-types?branch=master#29783ae10b31911065bf86667a2e11d02b982571"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1711,7 +1711,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "531e46835a22af56d1e3b66f04844bed63158bc094a628bec1d321d9b4c44bf2"
 dependencies = [
  "bit-set",
- "regex-automata 0.4.8",
+ "regex-automata 0.4.9",
  "regex-syntax 0.8.5",
 ]
 
@@ -2736,7 +2736,7 @@ version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "507460a910eb7b32ee961886ff48539633b788a36b65692b95f225b844c82553"
 dependencies = [
- "regex-automata 0.4.8",
+ "regex-automata 0.4.9",
 ]
 
 [[package]]
@@ -3687,7 +3687,7 @@ checksum = "b544ef1b4eac5dc2db33ea63606ae9ffcfac26c1416a2806ae0bf5f56b201191"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.4.8",
+ "regex-automata 0.4.9",
  "regex-syntax 0.8.5",
 ]
 
@@ -3702,9 +3702,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.8"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "368758f23274712b504848e9d5a6f010445cc8b87a7cdb4d7cbee666c1288da3"
+checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -5061,12 +5061,13 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 [[package]]
 name = "verifier"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#f9362c2dfa1fddc9b4fa6c9c5133cd9c01769855"
+source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#8cf1807e32e3a1fcdf74f4dec86a987a7ed411f1"
 dependencies = [
  "aqua-verifier-rs-types",
  "async-trait",
  "base64 0.22.1",
  "chrono",
+ "ethaddr",
  "ethers",
  "flagset",
  "futures",
