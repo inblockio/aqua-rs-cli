@@ -4,7 +4,7 @@ use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use verifier::verifier::sign_aqua_chain;
 use verifier::aqua_verifier_struct_impl::AquaVerifier;
-use crate::aqua::server::sign_message_server;
+use crate::server::sign_message_server;
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 
@@ -70,9 +70,17 @@ pub fn  cli_sign_chain(args : CliArgs, _aqua_verifier : AquaVerifier, sign_path 
 
     let runtime = runtime_result.unwrap();
 
+    let mut last_revision_hash="".to_string();
+
+    if aqua_chain.revisions.len() ==1 {
+        last_revision_hash = genesis_revision.metadata.verification_hash.to_string();
+    }else{
+       let (_last_hash ,last_rev) = aqua_chain.revisions.get(aqua_chain.revisions.len()-1).expect("Expected a revision as revision are more than one");
+       last_revision_hash= last_rev.metadata.verification_hash.to_string();
+    }
     // Run the async server in the runtime
     let result =
-        runtime.block_on(async { sign_message_server("test_message".to_string()).await });
+        runtime.block_on(async { sign_message_server(last_revision_hash).await });
 
     if result.is_err() {
         println!("Signing failed: {:#?}", result.err());

@@ -1,6 +1,7 @@
 pub mod aqua;
 pub mod models;
 pub mod utils;
+pub mod server;
 
 use crate::models::CliArgs;
 use aqua::gen_aqua_file::cli_generate_aqua_chain;
@@ -37,7 +38,7 @@ COMMANDS:
         2: Standard validation 
    • -h or --help to show usage, about aqua-cli.
    • -i or --info to show the cli version.
-   • -a or --alchemy to specify the achemy paskey for strict validation (this is optional)
+   
 
 EXAMPLES:
     aqua-cli -v chain.json
@@ -174,7 +175,7 @@ fn main() {
 
     // Check if API_DOMAIN is set
     let  aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
-    let  aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
+    let  _aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
     let  alchemy_key = env::var("aqua_alchemy_key").unwrap_or("".to_string());
     let  aqua_alchemy_look_up = env::var("aqua_alchemy_look_up").unwrap_or("".to_string());
     
