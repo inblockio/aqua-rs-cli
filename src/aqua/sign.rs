@@ -111,7 +111,7 @@ pub fn  cli_sign_chain(args : CliArgs, _aqua_verifier : AquaVerifier, sign_path 
     };
     logs_data.push(log_line);
 
-    if let Err(e) = save_page_data(&aqua_page_data, &sign_path, ".signed.json".to_string())
+    if let Err(e) = save_page_data(&aqua_page_data, &sign_path, "signed.json".to_string())
     {
         logs_data.push(format!("Error saving page data: {}", e));
     }
