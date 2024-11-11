@@ -1,9 +1,11 @@
-use std::{fs::{self, OpenOptions}, path::{Path, PathBuf}};
+use std::{fs::{self, File, OpenOptions}, path::{Path, PathBuf}};
 use std::io::Write;
 use aqua_verifier_rs_types::models::page_data::PageData;
 
 
 extern crate serde_json_path_to_error as serde_json;
+
+
 
 pub fn save_logs_to_file(logs : &Vec<String>, output_file : PathBuf, ) -> Result<String, String> {
 
@@ -59,7 +61,7 @@ pub fn save_page_data(aqua_page_data: &PageData, original_path: &Path, extension
         Ok(json_data) => {
             // Write JSON data to the new file
             fs::write(&output_path, json_data).map_err(|e| e.to_string())?;
-            println!("Page data saved to: {:?}", output_path);
+            println!("Aqua chain data saved to: {:?}", output_path);
             Ok(())
         }
         Err(e) => Err(format!("Error serializing PageData: {}", e)),
@@ -92,5 +94,15 @@ pub fn is_valid_output_file(s: &str) -> Result<String, String> {
         Ok(s.to_string())
     } else {
         Err("Output file must be .json, .html, or .pdf".to_string())
+    }
+}
+
+pub fn string_to_bool(s: String) -> bool {
+    match s.to_lowercase().as_str() {
+        "true" => true,
+        "yes" => true,
+        "false" => false,
+        "no" => false,
+        _ => false
     }
 }

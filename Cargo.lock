@@ -378,10 +378,12 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "console",
+ "dotenv",
  "env_logger",
  "futures",
  "hyper 0.14.31",
  "once_cell",
+ "rand",
  "serde",
  "serde_json",
  "serde_json_path_to_error",
@@ -943,12 +945,13 @@ dependencies = [
 
 [[package]]
 name = "cookie_store"
-version = "0.21.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4934e6b7e8419148b6ef56950d277af8561060b56afd59e2aadf98b59fce6baa"
+checksum = "2eac901828f88a5241ee0600950ab981148a18f2f756900ffba1b125ca6a3ef9"
 dependencies = [
  "cookie 0.18.1",
- "idna 0.5.0",
+ "document-features",
+ "idna 1.0.3",
  "log",
  "publicsuffix",
  "serde",
@@ -1231,6 +1234,21 @@ dependencies = [
  "quote",
  "syn 2.0.87",
 ]
+
+[[package]]
+name = "document-features"
+version = "0.2.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb6969eaabd2421f8a2775cfd2471a2b634372b4a25d41e3bd647b79912850a0"
+dependencies = [
+ "litrs",
+]
+
+[[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
 name = "dunce"
@@ -2428,16 +2446,6 @@ dependencies = [
 
 [[package]]
 name = "idna"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
-dependencies = [
- "unicode-bidi",
- "unicode-normalization",
-]
-
-[[package]]
-name = "idna"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "686f825264d630750a544639377bae737628043f20d38bbc029e8f29ea968a7e"
@@ -2824,6 +2832,12 @@ name = "litemap"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "643cb0b8d4fcc284004d5fd0d67ccf61dfffadb7f75e1e71bc420f4688a3a704"
+
+[[package]]
+name = "litrs"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
 name = "local-channel"
@@ -3901,9 +3915,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.39"
+version = "0.38.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "375116bee2be9ed569afe2154ea6a99dfdffd257f533f187498c2a8f5feaf4ee"
+checksum = "99e4ea3e1cdc4b559b8e5650f9c8e5998e3e5c1343b4eaf034565f32318d63c0"
 dependencies = [
  "bitflags 2.6.0",
  "errno",
@@ -4566,18 +4580,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02dd99dc800bbb97186339685293e1cc5d9df1f8fae2d0aecd9ff1c77efea892"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7c61ec9a6f64d2793d8a45faba21efbe3ced62a886d44c36a009b2b519b4c7e"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5047,7 +5061,7 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 [[package]]
 name = "verifier"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#8b74ad047b6bd1befbdb17fd94cf199828a59610"
+source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#f9362c2dfa1fddc9b4fa6c9c5133cd9c01769855"
 dependencies = [
  "aqua-verifier-rs-types",
  "async-trait",

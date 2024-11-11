@@ -8,9 +8,10 @@ use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
 use clap::{Arg, ArgAction, ArgGroup, Command};
-use std::path::PathBuf;
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use std::{env, path::PathBuf};
 use utils::{
-    is_valid_file, is_valid_json_file, is_valid_output_file,  
+    is_valid_file, is_valid_json_file, is_valid_output_file, string_to_bool,  
 };
 use verifier::aqua_verifier_struct_impl::{AquaVerifier, VerificationOptions};
 
@@ -49,7 +50,12 @@ EXAMPLES:
 
 
 SUMMARY
-   aquq-cli expects ateast parameter -s,-v,-w or -f.
+   * aquq-cli expects ateast parameter -s,-v,-w or -f.
+   * in your environment set the
+    1. aqua_domain="random_alphanumeric"
+    2. aqua_network="sepolia" or  "holesky" or "mainnet"
+    3. alchemy_key="alchemy_key" for witnessing
+    4. aqua_alchemy_look_up=  false or true
 
 For more information, visit: https://github.com/inblockio/aqua-verifier-cli"#;
 
@@ -155,15 +161,30 @@ pub fn parse_args() -> Result<CliArgs, String> {
     })
 }
 
-// Example usage in main function
-// #[tokio::main]
+
 fn main() {
+    dotenv::dotenv().ok();
+
+     // Generate a random alphanumeric string
+     let random_domain: String = thread_rng()
+     .sample_iter(&Alphanumeric)
+     .take(10)
+     .map(char::from)
+     .collect();
+
+    // Check if API_DOMAIN is set
+    let  aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
+    let  aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
+    let  alchemy_key = env::var("aqua_alchemy_key").unwrap_or("".to_string());
+    let  aqua_alchemy_look_up = env::var("aqua_alchemy_look_up").unwrap_or("".to_string());
+    
+    
     let option = VerificationOptions {
         version: 1.2,
         strict: false,
         allow_null: false,
-        alchemy_key: String::new(),
-        do_alchemy_key_lookup: false,
+        alchemy_key: alchemy_key,
+        do_alchemy_key_lookup: string_to_bool(aqua_alchemy_look_up),
     };
     let aqua_verifier = AquaVerifier::new(Some(option));
 
@@ -193,7 +214,7 @@ fn main() {
             cli_winess_chain(args.clone(), aqua_verifier, witness_path);
         }
         (_, _, _, true) => {
-            cli_generate_aqua_chain(args.clone(), aqua_verifier);
+            cli_generate_aqua_chain(args.clone(), aqua_verifier, aqua_domain);
         }
         _ => unreachable!(
             "Unable to determin course of action **Clap ensures at least one operation is selected"

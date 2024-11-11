@@ -3,23 +3,23 @@ use std::fs;
 
 use verifier::aqua_verifier_struct_impl::AquaVerifier;
 use crate::models::CliArgs;
-use crate::utils::save_logs_to_file;
+use crate::utils::{ save_logs_to_file, save_page_data};
 
 
 
 
-pub fn cli_generate_aqua_chain(args : CliArgs, aqua_verifier : AquaVerifier){
+pub fn cli_generate_aqua_chain(args : CliArgs, aqua_verifier : AquaVerifier, domain_id : String){
 
  let mut logs_data: Vec<String> = Vec::new();
 
             if let Some(file_path) = args.file {
-                tracing::info!("Generating aqua file from: {:?}", file_path);
+                // tracing::info!("Generating aqua file from: {:?}", file_path);
                 // Generate the aqua file
                 if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str()) {
                     let json_path = file_path.with_extension("json");
                     match fs::write(&json_path, "{}") {
                         Ok(_) => {
-                            println!("Generating aqua file: {:?}", json_path);
+                            println!("Generating aqua file from : {:?}", json_path);
                             // Generate the aqua file
 
                             // Read the file content into a Vec<u8>
@@ -28,8 +28,8 @@ pub fn cli_generate_aqua_chain(args : CliArgs, aqua_verifier : AquaVerifier){
                                     // Convert the file name to a String
                                     let file_name = file_name.to_string();
 
-                                    let domain_id = std::env::var("API_DOMAIN")
-                                        .unwrap_or_else(|_| "cli_domain_id".to_string());
+                                    // let  = std::env::var("API_DOMAIN")
+                                    //     .unwrap_or_else(|_| "cli_domain_id".to_string());
 
                                     // Call generate_aqua_chain with the necessary arguments
                                     match aqua_verifier.generate_aqua_chain(body_bytes, file_name, domain_id) {
@@ -39,8 +39,17 @@ pub fn cli_generate_aqua_chain(args : CliArgs, aqua_verifier : AquaVerifier){
                                             }
 
                                             logs_data.push(
-                                                "Success :  Validation is successful ".to_string(),
+                                                "Success :  Generating Aqua chain is successful ".to_string(),
                                             );
+
+
+                                            let e = save_page_data(&result.page_data, &file_path, "chain.json".to_string());
+
+                                            
+                                            if e.is_err(){
+                                                logs_data.push(format!("Error saving page data: {:#?}", e.err()));
+                                            
+                                            }
 
                                             //if verbose print out the logs if not print the last line
                                             if args.details {
@@ -69,6 +78,10 @@ pub fn cli_generate_aqua_chain(args : CliArgs, aqua_verifier : AquaVerifier){
                                                     );
                                                 }
                                             }
+
+                                     
+
+
                                         }
                                         Err(logs) => {
                                             for ele in logs {
