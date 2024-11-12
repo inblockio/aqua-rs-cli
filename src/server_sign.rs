@@ -1,10 +1,11 @@
 use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
-use serde::{Deserialize, Serialize};
 use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
+
+use crate::models::{AuthPayload, ResponseMessage, SignMessage};
 
 
 
@@ -14,7 +15,7 @@ struct AppStateServerSign {
     message: Mutex<String>
 }
 
-async fn get_sign_message(data: web::Data<AppState>) -> Result<HttpResponse, Error> {
+async fn get_sign_message(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -32,7 +33,7 @@ async fn get_sign_message(data: web::Data<AppState>) -> Result<HttpResponse, Err
     Ok(HttpResponse::Ok().json(SignMessage { message, nonce }))
 }
 
-async fn handle_auth(
+async fn handle_message_sign_payload(
     payload: web::Json<AuthPayload>,
     tx: web::Data<mpsc::Sender<AuthPayload>>,
     shutdown_tx: web::Data<broadcast::Sender<()>>,
@@ -78,7 +79,7 @@ pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, Str
             .app_data(shutdown_tx.clone())
             .app_data(web::JsonConfig::default().limit(4096))
             .service(web::resource("/message").route(web::get().to(get_sign_message)))
-            .service(web::resource("/auth").route(web::post().to(handle_auth)))
+            .service(web::resource("/auth").route(web::post().to(handle_message_sign_payload)))
             .service(Files::new("/", "./static").index_file("sign.html"))
     })
     .bind("127.0.0.1:8080");

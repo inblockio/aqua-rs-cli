@@ -6,6 +6,8 @@ use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
+use crate::models::{AuthPayload, ResponseMessage, SignMessage};
+
 
 // Changed to use Default derive
 #[derive(Debug, Default)]
@@ -13,7 +15,7 @@ struct AppStateServerWitness {
     message: Mutex<String>
 }
 
-async fn get_sign_message(data: web::Data<AppState>) -> Result<HttpResponse, Error> {
+async fn get_witness_message(data: web::Data<AppStateServerWitness>) -> Result<HttpResponse, Error> {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -31,7 +33,7 @@ async fn get_sign_message(data: web::Data<AppState>) -> Result<HttpResponse, Err
     Ok(HttpResponse::Ok().json(SignMessage { message, nonce }))
 }
 
-async fn handle_auth(
+async fn handle_witness_payload(
     payload: web::Json<AuthPayload>,
     tx: web::Data<mpsc::Sender<AuthPayload>>,
     shutdown_tx: web::Data<broadcast::Sender<()>>,
@@ -76,8 +78,8 @@ pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, Str
             .app_data(tx.clone())
             .app_data(shutdown_tx.clone())
             .app_data(web::JsonConfig::default().limit(4096))
-            .service(web::resource("/message").route(web::get().to(get_sign_message)))
-            .service(web::resource("/auth").route(web::post().to(handle_auth)))
+            .service(web::resource("/message").route(web::get().to(get_witness_message)))
+            .service(web::resource("/auth").route(web::post().to(handle_witness_payload)))
             .service(Files::new("/", "./static").index_file("witness.html"))
     })
     .bind("127.0.0.1:8080");

@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use aqua_verifier_rs_types::models::page_data::PageData;
 use verifier::model::ResultStatusEnum;
-use verifier::verifier::verify_aqua_chain;
 use verifier::aqua_verifier::AquaVerifier;
 
 use crate::models::CliArgs;
@@ -42,16 +41,16 @@ pub fn  cli_verify_chain(args : CliArgs, aqua_verifier : AquaVerifier, verify_pa
         return;
     }
     // aqua json file read
-    let res = verify_aqua_chain(
-        aqua_chain.unwrap().clone(),
-        args.alchemy.unwrap_or("no_key".to_string()),
-        args.level.unwrap_or("2".to_string()) == "1".to_string(),
+    let res = aqua_verifier.verify_aqua_chain(
+        &aqua_chain.unwrap().clone(),
+        // args.alchemy.unwrap_or("no_key".to_string()),
+        // args.level.unwrap_or("2".to_string()) == "1".to_string(),
     );
 
     // go through the Revision Aqua chain result
 
     logs_data.push("Info : Looping through a revisions ".to_string());
-    for i in res.revisionResults {
+    for i in res.revision_results {
         let log_line = if i.successful {
             "\t Success :  Revision is succefull".to_string()
         } else {

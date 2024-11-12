@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct CliArgs {
