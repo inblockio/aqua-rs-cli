@@ -41,13 +41,16 @@ pub fn  cli_verify_chain(args : CliArgs, aqua_verifier : AquaVerifier, verify_pa
         return;
     }
     // aqua json file read
-    let res = aqua_verifier.verify_aqua_chain(
+    let res_results = aqua_verifier.verify_aqua_chain(
         &aqua_chain.unwrap().clone(),
         // args.alchemy.unwrap_or("no_key".to_string()),
         // args.level.unwrap_or("2".to_string()) == "1".to_string(),
     );
 
     // go through the Revision Aqua chain result
+
+    if res_results.is_ok(){ 
+    let res = res_results.unwrap();
 
     logs_data.push("Info : Looping through a revisions ".to_string());
     for i in res.revision_results {
@@ -151,6 +154,10 @@ pub fn  cli_verify_chain(args : CliArgs, aqua_verifier : AquaVerifier, verify_pa
     };
     logs_data.push(log_line);
 
+}else{
+    let log_line = format!("An error occured {}", res_results.unwrap_err());
+    logs_data.push(log_line);
+}
     //if verbose print out the logs if not print the last line
     if args.details {
         for item in logs_data.clone() {
