@@ -4,7 +4,7 @@ use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
 use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
-use crate::html_template::SIGN_HTML;
+use crate::server_sign_html::SIGN_HTML;
 use crate::models::{SignPayload, ResponseMessage, SignMessage};
 
 

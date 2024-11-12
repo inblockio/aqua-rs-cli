@@ -3,7 +3,7 @@
 
 <head>
     <title>Sign-In with Ethereum</title>
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.3/dist/ethers.umd.min.js"></script>
     <style>
         .container {
             max-width: 800px;
@@ -55,8 +55,8 @@
 
 <body>
     <div class="container">
-        <h1>Sign Aqua Chain With Metamask</h1>
-        <button onclick="login()">Connect with MetaMask</button>
+        <h1>Witness Aqua Chain With Metamask</h1>
+        <button onclick="login()">Connecting with MetaMask ...</button>
         <div id="status" class="status"></div>
         <div id="message" class="message-box"></div>
     </div>
@@ -128,20 +128,25 @@
 
                 // Get message to sign from server
                 const { message } = await getPreviousVerificationHash();
-                showMessage(message);
+                let witness_event_verification_hash = message;
+                showMessage(witness_event_verification_hash);
 
                 // Create a Web3Provider instance
-                const provider = new window.ethers.providers.Web3Provider(window.ethereum);
-                await provider.send("eth_requestAccounts", []); // Ensure connection
+                // const provider = new window.ethers.providers.Web3Provider(window.ethereum);
+                const provider = new ethers.BrowserProvider(window.ethereum);
+                const networkId = "sepolia";
+                const currentChainId =  "0xaa36a7"
+                
+                
                 const signer = provider.getSigner();
 
                 showStatus('Please sign the message in MetaMask...');
 
-                // Sign message
+                // Sign witness_event_verification_hash
                 // const signature = await signer.signMessage(message);
                 // const publicKey = await signer.getAddress();
 
-                const contract_address = getChainAddress("sepolia");//ETH_CHAIN_ADDRESSES_MAP[appState.config.chain]
+                const contract_address = "0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611";// getChainAddress("sepolia");//ETH_CHAIN_ADDRESSES_MAP[appState.config.chain]
                 const network = "sepolia";
 
                 const params = [
@@ -164,7 +169,7 @@
                     .then( async (txhash) => {
                         console.log("Transaction hash is: ", txhash)
   
-                            showStatus('Message signed, sending to server...');
+                            showStatus('Transaction hash is: '+txhash+' , sending to server...');
 
                             console.log("tx_hash:", txhash);
                             console.log("wallet_address", ownerAddress);
@@ -200,14 +205,15 @@
 
             } catch (err) {
                 console.error(err);
-                showStatus('Failed to authenticate: ' + err.message, true);
+                showStatus(' Witenness :: Failed to authenticate: ' + err.message, true);
             }
         }
 
         (async () => {
-            // Get message to sign from server
+            // Get witness_event_verification_hash to sign from server
             const { message } = await getPreviousVerificationHash();
-            showMessage(message);
+            let witness_event_verification_hash = message;
+            showMessage(witness_event_verification_hash);
 
             await login();
 

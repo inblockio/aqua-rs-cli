@@ -2,8 +2,9 @@ pub mod aqua;
 pub mod models;
 pub mod utils;
 pub mod server_sign;
+pub mod server_sign_html;
 pub mod server_witness;
-pub mod  html_template;
+pub mod  server_witness_html;
 
 use crate::models::CliArgs;
 use aqua::gen_aqua_file::cli_generate_aqua_chain;

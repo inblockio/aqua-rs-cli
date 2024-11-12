@@ -104,14 +104,26 @@ pub fn  cli_sign_chain(args : CliArgs, aqua_verifier : AquaVerifier, sign_path :
 
     let res = aqua_verifier.sign_aqua_chain(aqua_page_data.clone(), rev_sig);
 
+    if res.is_err(){
+        res.clone().unwrap_err().iter().for_each(|item| println!("\t\t {}", item));
+        panic!("Error .... check logs above");
+    }
+
+    let (res_page_data, res_logs ) =  res.clone().unwrap();
+
+    res_logs.iter().for_each(|item| logs_data.push(format!("\t {}", item)));
+
+    
     let log_line = if res.is_ok() {
         "Success :  Signing Aqua chain is successful ".to_string()
     } else {
+
         "Error : Signing Aqua chain  failed".to_string()
     };
     logs_data.push(log_line);
 
-    if let Err(e) = save_page_data(&aqua_page_data, &sign_path, "signed.json".to_string())
+
+    if let Err(e) = save_page_data(&res_page_data, &sign_path, "signed.json".to_string())
     {
         logs_data.push(format!("Error saving page data: {}", e));
     }

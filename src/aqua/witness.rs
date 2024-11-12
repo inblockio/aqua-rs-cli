@@ -103,6 +103,16 @@ pub fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path
 
     let res = aqua_verifier.witness_aqua_chain(aqua_page_data.clone(), params);
 
+    if res.is_err(){
+        res.clone().unwrap_err().iter().for_each(|item| println!("\t\t {}", item));
+        panic!("Error .... check logs above");
+    }
+
+    let (res_page_data, res_logs ) =  res.clone().unwrap();
+
+    res_logs.iter().for_each(|item| logs_data.push(format!("\t {}", item)));
+
+
     let log_line = if res.is_ok() {
         "Success :  Witnessing Aqua chain is successful ".to_string()
     } else {
@@ -111,7 +121,7 @@ pub fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path
     logs_data.push(log_line);
 
     // In your main code, replace the TODO with:
-    if let Err(e) = save_page_data(&aqua_page_data, &witness_path, ".witness.json".to_string()) {
+    if let Err(e) = save_page_data(&res_page_data, &witness_path, ".witness.json".to_string()) {
         logs_data.push(format!("Error saving page data: {}", e));
     }
 

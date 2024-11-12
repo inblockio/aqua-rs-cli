@@ -1,3 +1,5 @@
+// Define the HTML content as a constant
+pub const SIGN_HTML: &str = r#"
 <!DOCTYPE html>
 <html>
 
@@ -192,3 +194,4 @@
 </body>
 
 </html>
+"#;

@@ -1,11 +1,10 @@
 use actix_cors::Cors;
-use actix_files::Files;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
 use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
-use crate::html_template::WITNESS_HTML;
+use crate::server_witness_html::WITNESS_HTML;
 use crate::models::{WitnessPayload, ResponseMessage, SignMessage};
 
 
@@ -22,13 +21,17 @@ async fn get_witness_message(data: web::Data<AppStateServerWitness>) -> Result<H
         .as_millis()
         .to_string();
 
-    let message = {
         let msg = data
             .message
             .lock()
-            .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"))?;
-        format!("I sign the following page verification_hash: [0x{}]", *msg)
-    };
+            .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
+        if msg.is_err() {
+            panic!("unable to get previous verification hash from server state");
+        }
+
+    let message =         format!("I sign the following page verification_hash: [0x{}]", msg.unwrap());
+    
+    println!("From get message the message to be signed ->  {}",  message);
 
     Ok(HttpResponse::Ok().json(SignMessage { message, nonce }))
 }
@@ -59,6 +62,7 @@ async fn witness_html() ->  Result<HttpResponse, Error> {
 
 // #[actix_web::main]
 pub async fn witness_message_server(previous_verification_hash: String) -> Result<WitnessPayload, String> {
+    println!("witness_message_server :: Previous  {}",previous_verification_hash);
     env_logger::init();
 
     // Initialize state with default values
