@@ -5,7 +5,7 @@ use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
-use crate::models::{AuthPayload, ResponseMessage, SignMessage};
+use crate::models::{SignPayload, ResponseMessage, SignMessage};
 
 
 
@@ -34,8 +34,8 @@ async fn get_sign_message(data: web::Data<AppStateServerSign>) -> Result<HttpRes
 }
 
 async fn handle_message_sign_payload(
-    payload: web::Json<AuthPayload>,
-    tx: web::Data<mpsc::Sender<AuthPayload>>,
+    payload: web::Json<SignPayload>,
+    tx: web::Data<mpsc::Sender<SignPayload>>,
     shutdown_tx: web::Data<broadcast::Sender<()>>,
 ) -> Result<HttpResponse, Error> {
     println!("Received auth request with payload: {:?}", payload);
@@ -51,7 +51,7 @@ async fn handle_message_sign_payload(
 }
 
 // #[actix_web::main]
-pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, String> {
+pub async fn sign_message_server(message_par: String) -> Result<SignPayload, String> {
     env_logger::init();
 
     // Initialize state with default values
@@ -59,7 +59,7 @@ pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, Str
         message: Mutex::new(message_par),
     });
 
-    let (tx, rx) = mpsc::channel::<AuthPayload>();
+    let (tx, rx) = mpsc::channel::<SignPayload>();
     let tx = web::Data::new(tx);
 
     let (shutdown_tx, _) = broadcast::channel::<()>(1);

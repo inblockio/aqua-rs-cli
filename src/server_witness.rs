@@ -1,12 +1,11 @@
 use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
-use serde::{Deserialize, Serialize};
 use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
-use crate::models::{AuthPayload, ResponseMessage, SignMessage};
+use crate::models::{WitnessPayload, ResponseMessage, SignMessage};
 
 
 // Changed to use Default derive
@@ -34,8 +33,8 @@ async fn get_witness_message(data: web::Data<AppStateServerWitness>) -> Result<H
 }
 
 async fn handle_witness_payload(
-    payload: web::Json<AuthPayload>,
-    tx: web::Data<mpsc::Sender<AuthPayload>>,
+    payload: web::Json<WitnessPayload>,
+    tx: web::Data<mpsc::Sender<WitnessPayload>>,
     shutdown_tx: web::Data<broadcast::Sender<()>>,
 ) -> Result<HttpResponse, Error> {
     println!("Received auth request with payload: {:?}", payload);
@@ -51,15 +50,15 @@ async fn handle_witness_payload(
 }
 
 // #[actix_web::main]
-pub async fn sign_message_server(message_par: String) -> Result<AuthPayload, String> {
+pub async fn witness_message_server(previous_verification_hash: String) -> Result<WitnessPayload, String> {
     env_logger::init();
 
     // Initialize state with default values
     let app_state = web::Data::new(AppStateServerWitness {
-        message: Mutex::new(message_par),
+        message: Mutex::new(previous_verification_hash),
     });
 
-    let (tx, rx) = mpsc::channel::<AuthPayload>();
+    let (tx, rx) = mpsc::channel::<WitnessPayload>();
     let tx = web::Data::new(tx);
 
     let (shutdown_tx, _) = broadcast::channel::<()>(1);

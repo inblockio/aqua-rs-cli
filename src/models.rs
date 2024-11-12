@@ -15,9 +15,16 @@ pub struct CliArgs {
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AuthPayload {
+pub struct SignPayload {
    pub signature: String,
    pub  public_key: String,
+   pub  wallet_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WitnessPayload {
+   pub tx_hash: String,
+   pub  network: String,
    pub  wallet_address: String,
 }
 
