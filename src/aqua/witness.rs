@@ -121,7 +121,7 @@ pub fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path
     logs_data.push(log_line);
 
     // In your main code, replace the TODO with:
-    if let Err(e) = save_page_data(&res_page_data, &witness_path, ".witness.json".to_string()) {
+    if let Err(e) = save_page_data(&res_page_data, &witness_path, "witness.json".to_string()) {
         logs_data.push(format!("Error saving page data: {}", e));
     }
 

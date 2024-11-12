@@ -1,37 +1,40 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
-use std::sync::{mpsc,  Mutex};
+use std::sync::{mpsc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
+use crate::models::{ResponseMessage, SignMessage, WitnessPayload};
 use crate::server_witness_html::WITNESS_HTML;
-use crate::models::{WitnessPayload, ResponseMessage, SignMessage};
-
 
 // Changed to use Default derive
 #[derive(Debug, Default)]
 struct AppStateServerWitness {
-    message: Mutex<String>
+    message: Mutex<String>,
 }
 
-async fn get_witness_message(data: web::Data<AppStateServerWitness>) -> Result<HttpResponse, Error> {
+async fn get_witness_message(
+    data: web::Data<AppStateServerWitness>,
+) -> Result<HttpResponse, Error> {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis()
         .to_string();
 
-        let msg = data
-            .message
-            .lock()
-            .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
-        if msg.is_err() {
-            panic!("unable to get previous verification hash from server state");
-        }
+    let msg = data
+        .message
+        .lock()
+        .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
+    if msg.is_err() {
+        panic!("unable to get previous verification hash from server state");
+    }
 
-    let message =         format!("I sign the following page verification_hash: [0x{}]", msg.unwrap());
-    
-    println!("From get message the message to be signed ->  {}",  message);
+    // let message =         format!("I sign the following page verification_hash: [0x{}]", msg.unwrap());
+
+    let message = format!("{}", msg.unwrap());
+
+    println!("From get message the message to be signed ->  {}", message);
 
     Ok(HttpResponse::Ok().json(SignMessage { message, nonce }))
 }
@@ -54,15 +57,20 @@ async fn handle_witness_payload(
 }
 
 // Handler for serving the index.html
-async fn witness_html() ->  Result<HttpResponse, Error> {
+async fn witness_html() -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(WITNESS_HTML))
 }
 
 // #[actix_web::main]
-pub async fn witness_message_server(previous_verification_hash: String) -> Result<WitnessPayload, String> {
-    println!("witness_message_server :: Previous  {}",previous_verification_hash);
+pub async fn witness_message_server(
+    previous_verification_hash: String,
+) -> Result<WitnessPayload, String> {
+    println!(
+        "witness_message_server :: Previous  {}",
+        previous_verification_hash
+    );
     env_logger::init();
 
     // Initialize state with default values
@@ -91,18 +99,18 @@ pub async fn witness_message_server(previous_verification_hash: String) -> Resul
             .app_data(web::JsonConfig::default().limit(4096))
             .service(web::resource("/message").route(web::get().to(get_witness_message)))
             .service(web::resource("/auth").route(web::post().to(handle_witness_payload)))
-            .service(web::resource("/").route(web::get().to(witness_html))) 
-        
-            // .service(Files::new("/", "./static").index_file("witness.html"))
+            .service(web::resource("/").route(web::get().to(witness_html)))
+
+        // .service(Files::new("/", "./static").index_file("witness.html"))
     })
     .bind("127.0.0.1:8080");
-    
+
     if server_bind.is_err() {
         return Err(format!("Unable to bind {:#?}", server_bind.err()));
     }
-    let server_obj =  server_bind.unwrap();
+    let server_obj = server_bind.unwrap();
 
-   let server =  server_obj.run();
+    let server = server_obj.run();
 
     let srv = server.handle();
 
@@ -112,7 +120,6 @@ pub async fn witness_message_server(previous_verification_hash: String) -> Resul
         let _ = shutdown_rx.recv().await;
         srv.stop(true).await;
     });
-
 
     // server.await?;
 
@@ -129,10 +136,7 @@ pub async fn witness_message_server(previous_verification_hash: String) -> Resul
     // Ok(())
 
     match server.await {
-        Ok(_) => {
-            rx.recv()
-                .map_err(|e| e.to_string())
-        }
+        Ok(_) => rx.recv().map_err(|e| e.to_string()),
         Err(e) => Err(e.to_string()),
     }
 }

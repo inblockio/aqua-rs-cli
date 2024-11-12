@@ -130,6 +130,7 @@ pub const WITNESS_HTML: &str = r#"
 
                 // Get message to sign from server
                 const { message } = await getPreviousVerificationHash();
+
                 let witness_event_verification_hash = message;
                 showMessage(witness_event_verification_hash);
 
@@ -137,9 +138,9 @@ pub const WITNESS_HTML: &str = r#"
                 // const provider = new window.ethers.providers.Web3Provider(window.ethereum);
                 const provider = new ethers.BrowserProvider(window.ethereum);
                 const networkId = "sepolia";
-                const currentChainId =  "0xaa36a7"
-                
-                
+                const currentChainId = "0xaa36a7"
+
+
                 const signer = provider.getSigner();
 
                 showStatus('Please sign the message in MetaMask...');
@@ -163,47 +164,57 @@ pub const WITNESS_HTML: &str = r#"
                         data: '0x9cef4ea1' + witness_event_verification_hash,
                     },
                 ]
-                window.ethereum
+                let txhash = await window.ethereum
                     .request({
                         method: 'eth_sendTransaction',
                         params: params,
                     })
-                    .then( async (txhash) => {
-                        console.log("Transaction hash is: ", txhash)
-  
-                            showStatus('Transaction hash is: '+txhash+' , sending to server...');
 
-                            console.log("tx_hash:", txhash);
-                            console.log("wallet_address", ownerAddress);
-                            console.log("network", network);
+                console.log("Transaction hash is: ", txhash)
 
-                            // Send to server
-                            const response = await fetch('/auth', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    tx_hash: signature,
-                                    wallet_address: ownerAddress,
-                                    network: network
-                                })
-                            });
+                // try for network  request
+                // above tyr is for metamask stuff
+                try {
 
-                            if (!response.ok) {
-                                throw new Error(`Server responded with status: ${response.status}`);
-                            }
+                    showStatus('Transaction hash is: ' + txhash + ' , sending to server...');
 
-                            const result = await response.json();
-                            showStatus('Signing successful!, closing the tab in 2 seconds');
+                    const walletAddress = ethers.getAddress(account)
 
-                            setTimeout(() => {
-                                window.close()
-                            }, 200);
+                    console.log("tx_hash:", txhash);
+                    console.log("wallet_address", walletAddress);
+                    console.log("network", network);
+
+                    // Send to server
+                    const response = await fetch('/auth', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            tx_hash: txhash,
+                            wallet_address: walletAddress,
+                            network: network
+                        })
+                    });
+
+                    if (!response.ok) {
+                        console.log("receieved something othere than 200  from api...");
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    showStatus('Signing successful!, closing the tab in 2 seconds');
+
+                    setTimeout(() => {
+                        window.close()
+                    }, 200);
+                } catch (e) {
+                    console.log("Api error");
+                    console.log("Error ..", e);
+                }
 
 
-                        }).catch((e ) => { alert("Something went wrong", e) })
-              
+
 
             } catch (err) {
                 console.error(err);
