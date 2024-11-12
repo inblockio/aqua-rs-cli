@@ -13,12 +13,12 @@ pub fn  cli_sign_chain(args : CliArgs, aqua_verifier : AquaVerifier, sign_path :
     println!("Signing file: {:?}", sign_path);
 
     let res: Result<PageData, String> = read_aqua_data(&sign_path);
-    println!("1");
+    // println!("1");
     // file reading error
     if res.is_err() {
         println!("2");
         // logs_data.push(res.err().unwrap());
-        println!("3 {:#?}", res.err());
+        // println!("3 {:#?}", res.err());
         if args.output.is_some() {
             let logs = save_logs_to_file(&logs_data, args.output.unwrap());
 
@@ -28,12 +28,12 @@ pub fn  cli_sign_chain(args : CliArgs, aqua_verifier : AquaVerifier, sign_path :
         }
         return;
     }
-    println!("4");
+    // println!("4");
     let aqua_page_data = res.unwrap();
     let aqua_chain_option = aqua_page_data.pages.get(0);
-    println!("5");
+    // println!("5");
     if aqua_chain_option.is_none() {
-        println!("6");
+        // println!("6");
         logs_data.push("no aqua chain found in page data".to_string());
         if args.output.is_some() {
             let logs = save_logs_to_file(&logs_data, args.output.unwrap());
@@ -55,7 +55,7 @@ pub fn  cli_sign_chain(args : CliArgs, aqua_verifier : AquaVerifier, sign_path :
     }
 
     let (_genesis_hash, genesis_revision) = genesis_hash_revision_option.unwrap();
-    println!("7");
+    // println!("7");
     // Create a new tokio runtime
     let runtime_result = tokio::runtime::Runtime::new().map_err(|e| e.to_string());
 
