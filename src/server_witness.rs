@@ -5,6 +5,7 @@ use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
+use crate::html_template::WITNESS_HTML;
 use crate::models::{WitnessPayload, ResponseMessage, SignMessage};
 
 
@@ -49,6 +50,13 @@ async fn handle_witness_payload(
     }))
 }
 
+// Handler for serving the index.html
+async fn witness_html() ->  Result<HttpResponse, Error> {
+    Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(WITNESS_HTML))
+}
+
 // #[actix_web::main]
 pub async fn witness_message_server(previous_verification_hash: String) -> Result<WitnessPayload, String> {
     env_logger::init();
@@ -79,7 +87,9 @@ pub async fn witness_message_server(previous_verification_hash: String) -> Resul
             .app_data(web::JsonConfig::default().limit(4096))
             .service(web::resource("/message").route(web::get().to(get_witness_message)))
             .service(web::resource("/auth").route(web::post().to(handle_witness_payload)))
-            .service(Files::new("/", "./static").index_file("witness.html"))
+            .service(web::resource("/").route(web::get().to(witness_html))) 
+        
+            // .service(Files::new("/", "./static").index_file("witness.html"))
     })
     .bind("127.0.0.1:8080");
     

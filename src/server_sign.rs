@@ -4,7 +4,7 @@ use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
 use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
-
+use crate::html_template::SIGN_HTML;
 use crate::models::{SignPayload, ResponseMessage, SignMessage};
 
 
@@ -50,6 +50,13 @@ async fn handle_message_sign_payload(
     }))
 }
 
+// Handler for serving the index.html
+async fn sign_html() ->  Result<HttpResponse, Error> {
+    Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(SIGN_HTML))
+}
+
 // #[actix_web::main]
 pub async fn sign_message_server(message_par: String) -> Result<SignPayload, String> {
     env_logger::init();
@@ -66,6 +73,8 @@ pub async fn sign_message_server(message_par: String) -> Result<SignPayload, Str
     let shutdown_tx = web::Data::new(shutdown_tx.clone());
     let mut shutdown_rx = shutdown_tx.subscribe();
 
+    
+
     println!("Starting server on http://localhost:8080");
 
     let server_bind = HttpServer::new(move || {
@@ -80,7 +89,8 @@ pub async fn sign_message_server(message_par: String) -> Result<SignPayload, Str
             .app_data(web::JsonConfig::default().limit(4096))
             .service(web::resource("/message").route(web::get().to(get_sign_message)))
             .service(web::resource("/auth").route(web::post().to(handle_message_sign_payload)))
-            .service(Files::new("/", "./static").index_file("sign.html"))
+            .service(web::resource("/").route(web::get().to(sign_html))) 
+            // .service(Files::new("/", "./static").index_file("index.html"))
     })
     .bind("127.0.0.1:8080");
     
@@ -100,20 +110,6 @@ pub async fn sign_message_server(message_par: String) -> Result<SignPayload, Str
         srv.stop(true).await;
     });
 
-
-    // server.await?;
-
-    // if let Ok(auth_payload) = rx.recv() {
-    //     println!("Received auth payload:");
-    //     println!("Signature: {}", auth_payload.signature);
-    //     println!("Public Key: {}", auth_payload.public_key);
-    //     println!("Wallet Address: {}", auth_payload.wallet_address);
-
-    //     Ok(auth_payload);
-    // }
-    // Err("Server error ".to_string())
-
-    // Ok(())
 
     match server.await {
         Ok(_) => {
