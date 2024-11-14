@@ -1,9 +1,6 @@
 pub mod aqua;
 pub mod models;
-pub mod server_sign;
-pub mod server_sign_html;
-pub mod server_witness;
-pub mod server_witness_html;
+pub mod  servers;
 pub mod utils;
 
 use crate::models::CliArgs;
@@ -137,8 +134,10 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .get_one::<String>("output")
         .map(|o| PathBuf::from(o));
     let level = matches.get_one::<String>("level").cloned();
-    let keys_file = matches.get_one::<String>("keys_file").map(|p| PathBuf::from(p));
-   
+    let keys_file = matches
+        .get_one::<String>("keys_file")
+        .map(|p| PathBuf::from(p));
+
     // Ensure only one of -v, -s, or -w is selected
     let operations_selected = [verify.is_some(), sign.is_some(), witness.is_some()]
         .iter()
@@ -160,7 +159,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         details,
         output,
         level,
-        alchemy,
+        keys_file,
     })
 }
 
@@ -179,6 +178,7 @@ fn main() {
     let _aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
     let alchemy_key = env::var("aqua_alchemy_key").unwrap_or("".to_string());
     let aqua_alchemy_look_up = env::var("aqua_alchemy_look_up").unwrap_or("".to_string());
+    let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
 
     let option = VerificationOptions {
         version: 1.2,
@@ -187,6 +187,7 @@ fn main() {
         alchemy_key: alchemy_key,
         do_alchemy_key_lookup: string_to_bool(aqua_alchemy_look_up),
     };
+
     let aqua_verifier = AquaVerifier::new(Some(option));
 
     let args = parse_args().unwrap_or_else(|err| {
@@ -202,6 +203,22 @@ fn main() {
         }
     }
 
+    let mut keys_file: Option<PathBuf> = None;
+    // attempt to read aregiument keys , if none attempt to rread from environment variables
+    if args.clone().keys_file.is_none() {
+        if !keys_file_env.is_empty() {
+            let res = is_valid_json_file(&keys_file_env);
+            if res.is_ok() {
+                println!("Reading keys file from env");
+                keys_file = Some(PathBuf::from(keys_file_env))
+            }else{
+                panic!("Error with key file provided in the env {:#?}",res.err() )
+            }
+        }
+    } else {
+        println!("Reading keys file from arguments");
+        keys_file = args.clone().keys_file;
+    }
     // Process the arguments based on the combination
     match (
         args.clone().verify,
@@ -210,7 +227,7 @@ fn main() {
         args.clone().file.is_some(),
     ) {
         (Some(verify_path), _, _, _) => cli_verify_chain(args, aqua_verifier, verify_path),
-        (_, Some(sign_path), _, _) => cli_sign_chain(args, aqua_verifier, sign_path),
+        (_, Some(sign_path), _, _) => cli_sign_chain(args, aqua_verifier, sign_path, keys_file),
         (_, _, Some(witness_path), _) => {
             cli_winess_chain(args.clone(), aqua_verifier, witness_path);
         }

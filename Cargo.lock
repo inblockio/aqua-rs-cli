@@ -376,18 +376,26 @@ dependencies = [
  "actix-web",
  "aqua-verifier-rs-types",
  "base64 0.22.1",
+ "bip32",
  "clap",
  "console",
  "dotenv",
  "env_logger",
+ "eth-keystore",
+ "ethers",
+ "eyre",
  "futures",
+ "hex",
  "hyper 0.14.31",
+ "k256",
  "once_cell",
  "rand",
+ "secp256k1",
  "serde",
  "serde_json",
  "serde_json_path_to_error",
  "sha3",
+ "tiny-keccak",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -531,6 +539,24 @@ name = "bech32"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
+
+[[package]]
+name = "bip32"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa13fae8b6255872fd86f7faf4b41168661d7d78609f7bfe6771b85c6739a15b"
+dependencies = [
+ "bs58",
+ "hmac 0.12.1",
+ "k256",
+ "once_cell",
+ "pbkdf2 0.12.2",
+ "rand_core",
+ "ripemd",
+ "sha2 0.10.8",
+ "subtle",
+ "zeroize",
+]
 
 [[package]]
 name = "bit-set"
@@ -4097,6 +4123,25 @@ dependencies = [
  "pkcs8",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
+dependencies = [
+ "rand",
+ "secp256k1-sys",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

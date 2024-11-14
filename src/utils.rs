@@ -2,6 +2,8 @@ use std::{fs::{self, File, OpenOptions}, path::{Path, PathBuf}};
 use std::io::Write;
 use aqua_verifier_rs_types::models::page_data::PageData;
 
+use crate::models::SecreatKeys;
+
 
 extern crate serde_json_path_to_error as serde_json;
 
@@ -35,6 +37,27 @@ pub fn read_aqua_data(path: &PathBuf) -> Result<PageData, String> {
     match data {
         Ok(data) =>{
             let res= serde_json::from_str::<PageData>(&data);
+            match res {
+                Ok(res_data)=>{
+                    Ok(res_data)
+                }
+                Err(err_data)=>{
+                    return Err(format!("Error, parsing json {}", err_data));
+                }
+            }
+        }
+        Err(e)=>{
+            return Err(format!("Error , {}", e));
+        }
+    }
+}
+
+
+pub fn read_secreat_keys(path: &PathBuf) -> Result<SecreatKeys, String> {
+    let data = fs::read_to_string(path);
+    match data {
+        Ok(data) =>{
+            let res= serde_json::from_str::<SecreatKeys>(&data);
             match res {
                 Ok(res_data)=>{
                     Ok(res_data)

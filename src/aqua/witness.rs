@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
 use crate::models::{CliArgs, WitnessPayload};
-use crate::server_witness::witness_message_server;
+use crate::servers::server_witness::witness_message_server;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 use aqua_verifier_rs_types::models::content::RevisionWitnessInput;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use verifier::aqua_verifier::AquaVerifier;
 
-pub fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path: PathBuf) {
+pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path: PathBuf) {
     let mut logs_data: Vec<String> = Vec::new();
 
     println!("Witnessing file: {:?}", witness_path);

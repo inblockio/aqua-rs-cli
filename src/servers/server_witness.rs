@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
 use crate::models::{ResponseMessage, SignMessage, WitnessPayload};
-use crate::server_witness_html::WITNESS_HTML;
+use crate::servers::server_witness_html::WITNESS_HTML;
 
 // Changed to use Default derive
 #[derive(Debug, Default)]

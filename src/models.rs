@@ -1,6 +1,16 @@
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecreatKeys {
+
+    pub mnemonic: Option<String>,
+    pub nostr_sk: Option<String>,
+    #[serde(rename = "did:key")]
+    pub did_key: Option<String>,
+
+}
 #[derive(Debug, Clone)]
 pub struct CliArgs {
     pub verify: Option<PathBuf>,
@@ -10,7 +20,7 @@ pub struct CliArgs {
     pub details: bool,
     pub output: Option<PathBuf>,
     pub level: Option<String>,
-    pub alchemy: Option<String>,
+    pub keys_file: Option<PathBuf>,
 }
 
 
