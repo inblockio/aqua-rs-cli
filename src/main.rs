@@ -1,10 +1,10 @@
 pub mod aqua;
 pub mod models;
-pub mod utils;
 pub mod server_sign;
 pub mod server_sign_html;
 pub mod server_witness;
-pub mod  server_witness_html;
+pub mod server_witness_html;
+pub mod utils;
 
 use crate::models::CliArgs;
 use aqua::gen_aqua_file::cli_generate_aqua_chain;
@@ -14,11 +14,8 @@ use aqua::witness::cli_winess_chain;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{env, path::PathBuf};
-use utils::{
-    is_valid_file, is_valid_json_file, is_valid_output_file, string_to_bool,  
-};
+use utils::{is_valid_file, is_valid_json_file, is_valid_output_file, string_to_bool};
 use verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
-
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -41,6 +38,7 @@ COMMANDS:
         2: Standard validation 
    • -h or --help to show usage, about aqua-cli.
    • -i or --info to show the cli version.
+   • -k or --key-file to specify the file containings  (this can also be set in the env  )
    
 
 EXAMPLES:
@@ -115,11 +113,12 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .value_parser(["1", "2"])
             .default_value("2")
             .action(ArgAction::Set))
-        .arg(Arg::new("alchemy")
-            .short('a')
-            .long("alchemy")
+        .arg(Arg::new("keys_file")
+            .short('k')
+            .long("keys_file")
             .action(ArgAction::Set)
-            .help("Specify the alchemy passkey for strict validation"))
+            .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
+            .help("keys file json containing nounce, nostr_sk and did:key"))
         .group(ArgGroup::new("operation")
             .args(["verify", "sign", "witness", "file"])
             .required(true))
@@ -138,8 +137,8 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .get_one::<String>("output")
         .map(|o| PathBuf::from(o));
     let level = matches.get_one::<String>("level").cloned();
-    let alchemy = matches.get_one::<String>("alchemy").cloned();
-
+    let keys_file = matches.get_one::<String>("keys_file").map(|p| PathBuf::from(p));
+   
     // Ensure only one of -v, -s, or -w is selected
     let operations_selected = [verify.is_some(), sign.is_some(), witness.is_some()]
         .iter()
@@ -165,24 +164,22 @@ pub fn parse_args() -> Result<CliArgs, String> {
     })
 }
 
-
 fn main() {
     dotenv::dotenv().ok();
 
-     // Generate a random alphanumeric string
-     let random_domain: String = thread_rng()
-     .sample_iter(&Alphanumeric)
-     .take(10)
-     .map(char::from)
-     .collect();
+    // Generate a random alphanumeric string
+    let random_domain: String = thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(10)
+        .map(char::from)
+        .collect();
 
     // Check if API_DOMAIN is set
-    let  aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
-    let  _aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
-    let  alchemy_key = env::var("aqua_alchemy_key").unwrap_or("".to_string());
-    let  aqua_alchemy_look_up = env::var("aqua_alchemy_look_up").unwrap_or("".to_string());
-    
-    
+    let aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
+    let _aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
+    let alchemy_key = env::var("aqua_alchemy_key").unwrap_or("".to_string());
+    let aqua_alchemy_look_up = env::var("aqua_alchemy_look_up").unwrap_or("".to_string());
+
     let option = VerificationOptions {
         version: 1.2,
         strict: false,
