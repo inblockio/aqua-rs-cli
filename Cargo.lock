@@ -407,7 +407,7 @@ dependencies = [
 [[package]]
 name = "aqua-verifier-rs-types"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs-types?branch=master#29783ae10b31911065bf86667a2e11d02b982571"
+source = "git+https://github.com/inblockio/aqua-verifier-rs-types?branch=main#d3945394898b7af684b28923516cf02447a70cfe"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5107,7 +5107,7 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 [[package]]
 name = "verifier"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#4c5f1efcd4b86a026a12ea66f972d52ca89bdf3d"
+source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#3b749be88d5ff15197a3ad2df4158fc629c986cf"
 dependencies = [
  "aqua-verifier-rs-types",
  "async-trait",

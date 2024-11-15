@@ -40,7 +40,9 @@ pub(crate) fn get_wallet(mnemonic_str: &str) -> Result<(String, String, String)>
     // Generate public key
     let public_key = private_key.public_key();
     let public_key_bytes = public_key.to_encoded_point(false).as_bytes().to_vec();
-    let public_key_hex = hex::encode(&public_key_bytes);
+    let public_key_string = hex::encode(&public_key_bytes);
+    let public_key_hex = format!("0x{}", public_key_string);
+
     
     // Generate Ethereum address (last 20 bytes of keccak256 of public key)
     let mut hasher = Keccak::v256();

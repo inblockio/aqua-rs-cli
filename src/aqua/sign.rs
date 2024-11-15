@@ -220,7 +220,7 @@ fn process_verification_and_save(
 ) -> Result<(), String> {
     logs_data.push("Info : Processing verification and saving results...".to_string());
 
-    println!("Error cause {:#?} ",rev_sig);
+    // println!("Error cause {:#?} ",rev_sig);
     
     let (res_page_data, res_logs) = aqua_verifier
         .sign_aqua_chain(aqua_page_data, rev_sig)
