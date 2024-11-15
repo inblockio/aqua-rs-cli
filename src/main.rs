@@ -1,13 +1,16 @@
 pub mod aqua;
 pub mod models;
-pub mod  servers;
+pub mod servers;
 pub mod utils;
 
 use crate::models::CliArgs;
-use aqua::gen_aqua_file::cli_generate_aqua_chain;
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
+use aqua::{
+    delete_revision_from_aqua_chain::cli_remove_revisions_from_aqua_chain,
+    generate_aqua_chain_from_file::cli_generate_aqua_chain,
+};
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{env, path::PathBuf};
@@ -36,7 +39,8 @@ COMMANDS:
    • -h or --help to show usage, about aqua-cli.
    • -i or --info to show the cli version.
    • -k or --key-file to specify the file containings  (this can also be set in the env  )
-   
+   • -r or --remove remove revision from an aqua json file, bydefault removes last revsion but can be used with -c or --count parameter to specifiy the number of revisions
+   • -c or --count to specify the number of revisions to remove (note a genesis revision cannot be removed)
 
 EXAMPLES:
     aqua-cli -v chain.json
@@ -83,6 +87,19 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .action(ArgAction::Set)
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
             .help("Witness an aqua json file"))
+        .arg(
+                Arg::new("count")
+                    .short('c')
+                    .long("count")
+                    .value_parser(clap::value_parser!(i32)) // Ensures it's a valid unsigned integer
+                    .help("Sets a count value"),
+            )
+        .arg(Arg::new("remove")
+            .short('r')
+            .long("remove")
+            .action(ArgAction::Set)
+            .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
+            .help("remove revision from an aqua json file, bydefault removes last revsion but can be used with -c or --count parameter to specifiy the number of revisions"))
         .arg(Arg::new("file")
             .short('f')
             .long("file")
@@ -117,12 +134,15 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
             .help("keys file json containing nounce, nostr_sk and did:key"))
         .group(ArgGroup::new("operation")
-            .args(["verify", "sign", "witness", "file"])
+            .args(["verify", "sign", "witness", "file", "remove"])
             .required(true))
         .get_matches();
 
     let verify = matches
         .get_one::<String>("verify")
+        .map(|p| PathBuf::from(p));
+    let remove = matches
+        .get_one::<String>("remove")
         .map(|p| PathBuf::from(p));
     let sign = matches.get_one::<String>("sign").map(|p| PathBuf::from(p));
     let witness = matches
@@ -137,6 +157,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let keys_file = matches
         .get_one::<String>("keys_file")
         .map(|p| PathBuf::from(p));
+    let remove_count_string = matches.get_one::<i32>("count").cloned();
 
     // Ensure only one of -v, -s, or -w is selected
     let operations_selected = [verify.is_some(), sign.is_some(), witness.is_some()]
@@ -150,12 +171,19 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .to_string(),
         );
     }
+    let mut remove_count = 1;
+    if remove_count_string.is_some() {
+       
+        remove_count = remove_count_string.unwrap_or(1);
+    }
 
     Ok(CliArgs {
         verify,
         sign,
         witness,
         file,
+        remove,
+        remove_count,
         details,
         output,
         level,
@@ -211,8 +239,8 @@ fn main() {
             if res.is_ok() {
                 println!("Reading keys file from env");
                 keys_file = Some(PathBuf::from(keys_file_env))
-            }else{
-                panic!("Error with key file provided in the env {:#?}",res.err() )
+            } else {
+                panic!("Error with key file provided in the env {:#?}", res.err())
             }
         }
     } else {
@@ -225,15 +253,21 @@ fn main() {
         args.clone().sign,
         args.clone().witness,
         args.clone().file.is_some(),
+        args.clone().remove.is_some(),
     ) {
-        (Some(verify_path), _, _, _) => cli_verify_chain(args, aqua_verifier, verify_path),
-        (_, Some(sign_path), _, _) => cli_sign_chain(args, aqua_verifier, sign_path, keys_file),
-        (_, _, Some(witness_path), _) => {
-            cli_winess_chain(args.clone(), aqua_verifier, witness_path);
+        (Some(verify_path), _, _, _, _) => cli_verify_chain(args, aqua_verifier, verify_path),
+        (_, Some(sign_path), _, _, _) => cli_sign_chain(args, aqua_verifier, sign_path, keys_file),
+        (_, _, Some(witness_path), _, _) => {
+            cli_winess_chain(args.clone(), aqua_verifier, witness_path)
         }
-        (_, _, _, true) => {
-            cli_generate_aqua_chain(args.clone(), aqua_verifier, aqua_domain);
-        }
+        (_, _, _, true, _) => cli_generate_aqua_chain(args.clone(), aqua_verifier, aqua_domain),
+        (_, _, _, _, true) => cli_remove_revisions_from_aqua_chain(
+            args.clone(),
+            aqua_verifier,
+            args.clone()
+                .remove
+                .expect("aqua chain file to delete revision"),
+        ),
         _ => unreachable!(
             "Unable to determin course of action **Clap ensures at least one operation is selected"
         ),

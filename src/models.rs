@@ -17,6 +17,8 @@ pub struct CliArgs {
     pub sign: Option<PathBuf>,
     pub witness: Option<PathBuf>,
     pub file: Option<PathBuf>,
+    pub remove: Option<PathBuf>,
+    pub remove_count: i32,
     pub details: bool,
     pub output: Option<PathBuf>,
     pub level: Option<String>,
