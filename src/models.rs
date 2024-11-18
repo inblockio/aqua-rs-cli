@@ -13,7 +13,7 @@ pub struct SecreatKeys {
 }
 #[derive(Debug, Clone)]
 pub struct CliArgs {
-    pub verify: Option<PathBuf>,
+    pub authenticate: Option<PathBuf>,
     pub sign: Option<PathBuf>,
     pub witness: Option<PathBuf>,
     pub file: Option<PathBuf>,

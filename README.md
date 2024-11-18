@@ -8,8 +8,8 @@ Ensure to use the same version as the Aqua protocol version you are using for ex
 in your environment set the following variables.
     1. aqua_domain="random_alphanumeric" (if none is specified one is genrated)
     2. aqua_network="sepolia" or  "holesky" or "mainnet" (default is sepolia)
-    3. alchemy_key="alchemy_key" for witnessing  (optional)
-    4. aqua_alchemy_look_up=  false or true (optional)
+    3. verification_platform="alchemy" or "infura" or "none" for witnessing  (optional) default is none
+    4. api_key=  the alchemy key or infura api key (optional)
     5. keys_file = pathe to json file with similar contents as thos in keys.sample.json use a wallet without metemask
 
 Notes : if a keys fileis speciefied in the commands it will take precendence over the environment  valriables specified keys file
