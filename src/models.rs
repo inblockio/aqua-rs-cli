@@ -19,7 +19,7 @@ pub struct CliArgs {
     pub file: Option<PathBuf>,
     pub remove: Option<PathBuf>,
     pub remove_count: i32,
-    pub details: bool,
+    pub verbose: bool,
     pub output: Option<PathBuf>,
     pub level: Option<String>,
     pub keys_file: Option<PathBuf>,

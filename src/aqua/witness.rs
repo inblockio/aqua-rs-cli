@@ -126,7 +126,7 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
     }
 
     //if verbose print out the logs if not print the last line
-    if args.details {
+    if args.verbose {
         for item in logs_data.clone() {
             println!("{}", item);
         }

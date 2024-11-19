@@ -159,7 +159,7 @@ pub fn  cli_verify_chain(args : CliArgs, aqua_verifier : AquaVerifier, verify_pa
     logs_data.push(log_line);
 }
     //if verbose print out the logs if not print the last line
-    if args.details {
+    if args.verbose {
         for item in logs_data.clone() {
             println!("{}", item);
         }

@@ -42,7 +42,7 @@ pub fn cli_generate_aqua_chain(args: CliArgs, aqua_verifier: AquaVerifier, domai
                             }
 
                             //if verbose print out the logs if not print the last line
-                            if args.details {
+                            if args.verbose {
                                 for item in logs_data.clone() {
                                     println!("{}", item);
                                 }
@@ -73,7 +73,7 @@ pub fn cli_generate_aqua_chain(args: CliArgs, aqua_verifier: AquaVerifier, domai
                             logs_data.push("Error : Failed to generate aqua chain".to_string());
 
                             //if verbose print out the logs if not print the last line
-                            if args.details {
+                            if args.verbose {
                                 for item in logs_data {
                                     println!("{}", item);
                                 }

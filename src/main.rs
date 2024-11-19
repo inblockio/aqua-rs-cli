@@ -48,7 +48,7 @@ EXAMPLES:
     aqua-cli -w chain.json --output report.json
 
     aqua-cli -f document.pdf
-    aqua-cli --file image.png --details
+    aqua-cli --file image.png --verbose
     aqua-cli -f document.json --output report.json
 
 
@@ -132,7 +132,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
             .help("keys file json containing nounce, nostr_sk and did:key"))
         .group(ArgGroup::new("operation")
-            .args(["authenticate", "sign", "witness", "file", "remove"])
+            .args(["authenticate", "sign", "witness", "file", "delete"])
             .required(true))
         .get_matches();
 
@@ -140,14 +140,14 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .get_one::<String>("authenticate")
         .map(|p| PathBuf::from(p));
     let remove = matches
-        .get_one::<String>("remove")
+        .get_one::<String>("delete")
         .map(|p| PathBuf::from(p));
     let sign = matches.get_one::<String>("sign").map(|p| PathBuf::from(p));
     let witness = matches
         .get_one::<String>("witness")
         .map(|p| PathBuf::from(p));
     let file = matches.get_one::<String>("file").map(|p| PathBuf::from(p));
-    let details = matches.get_flag("details");
+    let verbose = matches.get_flag("verbose");
     let output = matches
         .get_one::<String>("output")
         .map(|o| PathBuf::from(o));
@@ -182,7 +182,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         file,
         remove,
         remove_count,
-        details,
+        verbose,
         output,
         level,
         keys_file,
@@ -201,8 +201,9 @@ fn main() {
 
     // Check if API_DOMAIN is set
     let aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
-    let _aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
-    let verification_platform = env::var("verification_platform").unwrap_or("none".to_string());
+    // let aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
+    let verification_platform: String = env::var("verification_platform").unwrap_or("none".to_string());
+    let verification_platform_chain: String = env::var("verification_platform_chain").unwrap_or("none".to_string());
     let api_key = env::var("api_key").unwrap_or("".to_string());
     let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
 
@@ -211,6 +212,7 @@ fn main() {
         strict: false,
         allow_null: false,
         verification_platform: verification_platform,
+        verification_platform_chain: verification_platform_chain,
         api_key: api_key,
     };
 

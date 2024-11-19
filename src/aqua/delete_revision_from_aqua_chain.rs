@@ -50,7 +50,7 @@ pub fn  cli_remove_revisions_from_aqua_chain(args : CliArgs, aqua_verifier : Aqu
             }
 
             //if verbose print out the logs if not print the last line
-            if args.details {
+            if args.verbose {
                 for item in logs_data.clone() {
                     println!("{}", item);
                 }
@@ -81,7 +81,7 @@ pub fn  cli_remove_revisions_from_aqua_chain(args : CliArgs, aqua_verifier : Aqu
             logs_data.push("Error : Failed to remove revisions from  aqua chain".to_string());
 
             //if verbose print out the logs if not print the last line
-            if args.details {
+            if args.verbose {
                 for item in logs_data {
                     println!("{}", item);
                 }
@@ -90,5 +90,4 @@ pub fn  cli_remove_revisions_from_aqua_chain(args : CliArgs, aqua_verifier : Aqu
             }
         }
     }
-
 }

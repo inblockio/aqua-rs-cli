@@ -245,7 +245,7 @@ fn process_verification_and_save(
 
 /// Output the results based on CLI arguments
 fn output_results(args: &CliArgs, logs_data: &Vec<String>) {
-    if args.details {
+    if args.verbose {
         logs_data.iter().for_each(|log| println!("{}", log));
     } else if let Some(last_log) = logs_data.last() {
         println!("{}", last_log);
