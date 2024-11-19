@@ -36,4 +36,3 @@ ethers = "2.0.14"
 eyre = "0.6"
 bip32 = "0.5"
 k256 = { version = "0.13", features = ["ecdsa"] }
-

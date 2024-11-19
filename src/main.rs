@@ -87,13 +87,11 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .action(ArgAction::Set)
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
             .help("Witness an aqua json file"))
-        .arg(
-                Arg::new("count")
+        .arg(Arg::new("count")
                     .short('c')
                     .long("count")
                     .value_parser(clap::value_parser!(i32)) // Ensures it's a valid unsigned integer
-                    .help("Sets a count value"),
-            )
+                    .help("Sets a count value")           )
         .arg(Arg::new("delete")
             .short('d')
             .long("delete")
