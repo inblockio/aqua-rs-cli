@@ -168,7 +168,7 @@ pub const SIGN_HTML: &str = r#"
                 try {
                     const data = await getSignNetwork();
                     console.log("Response network "+data.network +" from network ",data)
-                    if (data.network != network) {
+                    // if (data.network != network) {
                         network = data.network;
 
                         let chainId = ETH_CHAINID_MAP[network];
@@ -176,7 +176,7 @@ pub const SIGN_HTML: &str = r#"
                         console.log("Chain id  "+  chainId);
 
                         await switchNetwork(chainId);
-                    }
+                    // }
                 } catch (e) {
                     console.log("Error fetching  network ", e)
                 }
@@ -260,4 +260,5 @@ pub const SIGN_HTML: &str = r#"
 </body>
 
 </html>
+
 "#;

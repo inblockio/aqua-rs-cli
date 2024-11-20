@@ -66,6 +66,18 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
 
     <script>
 
+        const ETH_CHAINID_MAP = {
+            'mainnet': '0x1',
+            'sepolia': '0xaa36a7',
+            'holesky': '0x4268',
+        };
+
+        const ETH_CHAIN_ADDRESSES_MAP = {
+            'mainnet': '0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611',
+            'sepolia': '0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611',
+            'holesky': '0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611',
+        };
+
         function getChainId(key) {
             // Create a Map
             const map = new Map();
@@ -117,8 +129,10 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
 
 
         async function switchNetwork(chainId) {
+            console.log(" switchNetwork chain " + chainId)
             // const chainId = '0x89'; // Example: Polygon Mainnet chain ID
             if (typeof window.ethereum !== 'undefined') {
+                console.log("etherium found")
                 try {
                     // Check if the network is already set
                     await window.ethereum.request({
@@ -128,7 +142,10 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
                     console.log("Network switched successfully");
                 } catch (error) {
                     // If the network is not added, request MetaMask to add it
+                    showStatus("Network switched error", err.message);
+                    console.log("Network switched error", error);
 
+                    
                 }
             } else {
                 console.error("MetaMask is not installed.");
@@ -177,11 +194,16 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
                 let network = "sepolia";
                 try {
                     const data = await getSignNetwork();
-                    console.log("Response network "+data.network +" from network ",data)
-                    if (data.network != network) {
+                    console.log("Response network " + data.network + " from network ", data)
+                    // if (data.network != network) {
                         network = data.network;
-                        await switchNetwork
-                    }
+                        let chainId = ETH_CHAINID_MAP[network];
+
+                        console.log("Chain id  " + chainId);
+
+                        await switchNetwork(chainId);
+
+                    // }
                 } catch (e) {
                     console.log("Error fetching  network ", e)
                 }
@@ -261,7 +283,7 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
 
                     setTimeout(() => {
                         window.close()
-                    }, 200);
+                    }, 2000);
                 } catch (e) {
                     console.log("Api error");
                     console.log("Error ..", e);
