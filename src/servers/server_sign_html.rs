@@ -2,7 +2,8 @@
 // copy the contents of static/sign.html to this string literal.
 // since we are shipping a static binary html has to be hard coded.
 // the static/sign.html is used for testing in dev
-pub const SIGN_HTML: &str = r#"<!DOCTYPE html>
+pub const SIGN_HTML: &str = r#"
+<!DOCTYPE html>
 <html>
 
 <head>
@@ -117,7 +118,7 @@ pub const SIGN_HTML: &str = r#"<!DOCTYPE html>
                     console.log("Network switched successfully");
                 } catch (error) {
                     // If the network is not added, request MetaMask to add it
-
+                    console.log("Network switched error",  error);
                 }
             } else {
                 console.error("MetaMask is not installed.");
@@ -161,12 +162,20 @@ pub const SIGN_HTML: &str = r#"<!DOCTYPE html>
                 // const networkId = "sepolia";
                 // const currentChainId = "0xaa36a7"
 
+
+                let network = "sepolia";
+
                 try {
                     const data = await getSignNetwork();
                     console.log("Response network "+data.network +" from network ",data)
                     if (data.network != network) {
                         network = data.network;
-                        await switchNetwork
+
+                        let chainId = ETH_CHAINID_MAP[network];
+
+                        console.log("Chain id  "+  chainId);
+
+                        await switchNetwork(chainId);
                     }
                 } catch (e) {
                     console.log("Error fetching  network ", e)
@@ -233,6 +242,8 @@ pub const SIGN_HTML: &str = r#"<!DOCTYPE html>
             } catch (err) {
                 console.error(err);
                 console.log("eRROR " + err.message);
+                showStatus("Error =>" + err.message);
+                
                 // showStatus('Failed to authenticate: ' + err.message, true);
             }
         }

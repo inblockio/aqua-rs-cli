@@ -14,15 +14,16 @@ struct AppStateServerSign {
 }
 
 async fn get_sign_network(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
-    let network = {
-        let msg = data
-            .network
-            .lock()
-            .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"))?;
-        format!("I sign the following page verification_hash: [0x{}]", *msg)
-    };
+    let msg =  data
+    .network
+    .lock()
+    .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"))?;
 
-    Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { network }))
+    // {
+    //      format!("I sign the following page verification_hash: [0x{}]", *msg)
+    // };
+    let network = msg.clone();
+    Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { network   }))
 }
 
 async fn get_sign_message(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
