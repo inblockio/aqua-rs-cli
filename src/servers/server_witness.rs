@@ -1,16 +1,44 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
-use std::sync::{mpsc, Mutex};
+use hyper::body::HttpBody;
+use std::sync::{mpsc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
-use crate::models::{ResponseMessage, SignMessage, WitnessPayload};
+use crate::models::{ResponseMessage, SignMessage, WitnessPayload, SignOrWitnessNetwork};
 use crate::servers::server_witness_html::WITNESS_HTML;
 
 // Changed to use Default derive
 #[derive(Debug, Default)]
 struct AppStateServerWitness {
     message: Mutex<String>,
+    network: Mutex<String>,
+}
+
+
+
+
+async fn get_witness_network(
+    data: web::Data<AppStateServerWitness>,
+) -> Result<HttpResponse, Error> {
+    let network_res = data
+        .network
+        .lock()
+        .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
+   
+    if network_res.is_err() {
+        panic!("unable to get previous verification hash from server state");
+    }
+
+    let network_guard: MutexGuard<'_, String> = network_res.unwrap();
+    // Clone the String value from inside the MutexGuard
+    let network_value = network_guard.clone();
+    // Or if you just need to reference the String:
+    // let network_value = network_guard.as_str();
+
+    Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { 
+        network: network_value 
+    }))
 }
 
 async fn get_witness_message(
@@ -66,6 +94,7 @@ async fn witness_html() -> Result<HttpResponse, Error> {
 // #[actix_web::main]
 pub async fn witness_message_server(
     previous_verification_hash: String,
+    network: String,
 ) -> Result<WitnessPayload, String> {
     println!(
         "witness_message_server :: Previous  {}",
@@ -76,6 +105,7 @@ pub async fn witness_message_server(
     // Initialize state with default values
     let app_state = web::Data::new(AppStateServerWitness {
         message: Mutex::new(previous_verification_hash),
+        network: Mutex::new(network),
     });
 
     let (tx, rx) = mpsc::channel::<WitnessPayload>();
@@ -97,6 +127,7 @@ pub async fn witness_message_server(
             .app_data(tx.clone())
             .app_data(shutdown_tx.clone())
             .app_data(web::JsonConfig::default().limit(4096))
+            .service(web::resource("/network").route(web::get().to(get_witness_network)))
             .service(web::resource("/message").route(web::get().to(get_witness_message)))
             .service(web::resource("/auth").route(web::post().to(handle_witness_payload)))
             .service(web::resource("/").route(web::get().to(witness_html)))

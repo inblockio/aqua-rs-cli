@@ -41,6 +41,12 @@ pub struct WitnessPayload {
 }
 
 #[derive(Debug, Serialize)]
+pub struct SignOrWitnessNetwork {
+    pub network: String,
+    
+}
+
+#[derive(Debug, Serialize)]
 pub struct SignMessage {
     pub message: String,
     pub nonce: String,

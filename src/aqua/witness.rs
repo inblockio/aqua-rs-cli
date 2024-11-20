@@ -1,3 +1,4 @@
+use std::env;
 use std::path::PathBuf;
 
 use crate::models::{CliArgs, WitnessPayload};
@@ -76,9 +77,12 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
         last_revision_hash = last_rev.metadata.verification_hash.to_string();
     }
 
+    let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
+
+
     // Run the async server in the runtime
     let result: Result<WitnessPayload, String> =
-        runtime.block_on(async { witness_message_server(last_revision_hash).await });
+        runtime.block_on(async { witness_message_server(last_revision_hash, chain).await });
 
     if result.is_err() {
         println!("Signing failed: {:#?}", result.err());

@@ -1,6 +1,7 @@
-
-pub const WITNESS_HTML: &str = r#"
-<!DOCTYPE html>
+// copy the contents of static/witness.html to this string literal.
+// since we are shipping a static binary html has to be hard coded.
+// the static/witness.html is used for testing in dev
+pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
 <html>
 
 <head>
@@ -106,6 +107,33 @@ pub const WITNESS_HTML: &str = r#"
             return response.json();
         }
 
+        async function getSignNetwork() {
+            const response = await fetch('/network');
+            if (!response.ok) {
+                throw new Error('Failed to get sign message');
+            }
+            return response.json();
+        }
+
+
+        async function switchNetwork(chainId) {
+            // const chainId = '0x89'; // Example: Polygon Mainnet chain ID
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    // Check if the network is already set
+                    await window.ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId }],
+                    });
+                    console.log("Network switched successfully");
+                } catch (error) {
+                    // If the network is not added, request MetaMask to add it
+
+                }
+            } else {
+                console.error("MetaMask is not installed.");
+            }
+        }
 
         async function login() {
             if (typeof window.ethereum === 'undefined') {
@@ -137,20 +165,46 @@ pub const WITNESS_HTML: &str = r#"
                 // Create a Web3Provider instance
                 // const provider = new window.ethers.providers.Web3Provider(window.ethereum);
                 const provider = new ethers.BrowserProvider(window.ethereum);
-                const networkId = "sepolia";
-                const currentChainId = "0xaa36a7"
+                // const networkId = "sepolia";
+                // const currentChainId = "0xaa36a7"
 
 
                 const signer = provider.getSigner();
 
                 showStatus('Please sign the message in MetaMask...');
 
-                // Sign witness_event_verification_hash
-                // const signature = await signer.signMessage(message);
-                // const publicKey = await signer.getAddress();
 
-                const contract_address = "0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611";// getChainAddress("sepolia");//ETH_CHAIN_ADDRESSES_MAP[appState.config.chain]
-                const network = "sepolia";
+                let network = "sepolia";
+                try {
+                    const data = await getSignNetwork();
+                    console.log("Response network "+data.network +" from network ",data)
+                    if (data.network != network) {
+                        network = data.network;
+                        await switchNetwork
+                    }
+                } catch (e) {
+                    console.log("Error fetching  network ", e)
+                }
+
+                let address = '0x9cef4ea1'
+
+
+                let address_data = getChainId(network);
+
+                if (address_data != undefined) {
+                    address = address_data;
+                }
+
+                const contract_address = "0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611";//ETH_CHAIN_ADDRESSES_MAP[appState.config.chain]
+
+
+                let chain_address = getChainAddress("sepolia");
+
+                if (chain_address != undefined) {
+                    contract_address = chain_address;
+                }
+
+                console.log("network " + network + " addrss " + address + " chain contract address " + contract_address);
 
                 const params = [
                     {
@@ -161,7 +215,7 @@ pub const WITNESS_HTML: &str = r#"
                         // automatically set by MetaMask.
                         // gas: '0x7cc0', // 30400
                         // gasPrice: '0x328400000',
-                        data: '0x9cef4ea1' + witness_event_verification_hash,
+                        data: address + witness_event_verification_hash,
                     },
                 ]
                 let txhash = await window.ethereum

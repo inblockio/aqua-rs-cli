@@ -1,6 +1,8 @@
 // Define the HTML content as a constant
-pub const SIGN_HTML: &str = r#"
-<!DOCTYPE html>
+// copy the contents of static/sign.html to this string literal.
+// since we are shipping a static binary html has to be hard coded.
+// the static/sign.html is used for testing in dev
+pub const SIGN_HTML: &str = r#"<!DOCTYPE html>
 <html>
 
 <head>
@@ -64,6 +66,18 @@ pub const SIGN_HTML: &str = r#"
     </div>
 
     <script>
+        const ETH_CHAINID_MAP = {
+            'mainnet': '0x1',
+            'sepolia': '0xaa36a7',
+            'holesky': '0x4268',
+        };
+
+        const ETH_CHAIN_ADDRESSES_MAP = {
+            'mainnet': '0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611',
+            'sepolia': '0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611',
+            'holesky': '0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611',
+        };
+
         function showStatus(message, isError = false) {
             const statusDiv = document.getElementById('status');
             statusDiv.className = `status ${isError ? 'error' : 'success'}`;
@@ -83,6 +97,32 @@ pub const SIGN_HTML: &str = r#"
             return response.json();
         }
 
+        async function getSignNetwork() {
+            const response = await fetch('/network');
+            if (!response.ok) {
+                throw new Error('Failed to get sign message');
+            }
+            return response.json();
+        }
+
+        async function switchNetwork(chainId) {
+            // const chainId = '0x89'; // Example: Polygon Mainnet chain ID
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    // Check if the network is already set
+                    await window.ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId }],
+                    });
+                    console.log("Network switched successfully");
+                } catch (error) {
+                    // If the network is not added, request MetaMask to add it
+
+                }
+            } else {
+                console.error("MetaMask is not installed.");
+            }
+        }
 
         async function login() {
             if (typeof window.ethereum === 'undefined') {
@@ -105,7 +145,7 @@ pub const SIGN_HTML: &str = r#"
                     return;
                 }
 
-                
+
                 showStatus('Account connected: ' + account);
 
                 // Get message to sign from server
@@ -114,13 +154,28 @@ pub const SIGN_HTML: &str = r#"
 
                 console.log("message ", message)
 
+
+
                 // Create a  instance
                 const provider = new ethers.BrowserProvider(window.ethereum);
-                const networkId = "sepolia";
-                const currentChainId =  "0xaa36a7"
+                // const networkId = "sepolia";
+                // const currentChainId = "0xaa36a7"
+
+                try {
+                    const data = await getSignNetwork();
+                    console.log("Response network "+data.network +" from network ",data)
+                    if (data.network != network) {
+                        network = data.network;
+                        await switchNetwork
+                    }
+                } catch (e) {
+                    console.log("Error fetching  network ", e)
+                }
+
+
 
                 const signer = await provider.getSigner();
-                
+
                 showStatus('Please sign the message in MetaMask...');
 
                 // Hash the message (optional but recommended)
@@ -132,15 +187,15 @@ pub const SIGN_HTML: &str = r#"
 
                 console.log("Signature: ", signature)
 
-                if  (!signature){
+                if (!signature) {
                     alert("Signature not found ...");
                     return;
                 }
 
                 const publicKey = ethers.SigningKey.recoverPublicKey(
-                            messageHash,
-                            signature,
-                        )
+                    messageHash,
+                    signature,
+                )
 
                 showStatus('Message signed, sending to server...');
 
@@ -177,7 +232,7 @@ pub const SIGN_HTML: &str = r#"
 
             } catch (err) {
                 console.error(err);
-                console.log("eRROR "+err.message );
+                console.log("eRROR " + err.message);
                 // showStatus('Failed to authenticate: ' + err.message, true);
             }
         }

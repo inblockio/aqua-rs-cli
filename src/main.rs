@@ -203,7 +203,7 @@ fn main() {
     let aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
     // let aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
     let verification_platform: String = env::var("verification_platform").unwrap_or("none".to_string());
-    let verification_platform_chain: String = env::var("verification_platform_chain").unwrap_or("none".to_string());
+    let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
     let api_key = env::var("api_key").unwrap_or("".to_string());
     let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
 
@@ -212,7 +212,7 @@ fn main() {
         strict: false,
         allow_null: false,
         verification_platform: verification_platform,
-        verification_platform_chain: verification_platform_chain,
+        chain: chain,
         api_key: api_key,
     };
 

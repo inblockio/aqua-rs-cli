@@ -4,15 +4,29 @@ use std::sync::{mpsc,  Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use crate::servers::server_sign_html::SIGN_HTML;
-use crate::models::{SignPayload, ResponseMessage, SignMessage};
+use crate::models::{SignPayload, ResponseMessage, SignMessage, SignOrWitnessNetwork};
 
 
 
 // Changed to use Default derive
 #[derive(Debug, Default)]
 struct AppStateServerSign {
-    message: Mutex<String>
+    message: Mutex<String>,
+    network : Mutex<String>
 }
+
+async fn get_sign_network(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
+    let network = {
+        let msg = data
+            .network
+            .lock()
+            .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"))?;
+        format!("I sign the following page verification_hash: [0x{}]", *msg)
+    };
+
+    Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { network }))
+}
+
 
 async fn get_sign_message(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
     let nonce = SystemTime::now()
@@ -57,12 +71,13 @@ async fn sign_html() ->  Result<HttpResponse, Error> {
 }
 
 // #[actix_web::main]
-pub async fn sign_message_server(message_par: String) -> Result<SignPayload, String> {
+pub async fn sign_message_server(message_par: String, network_chain: String) -> Result<SignPayload, String> {
     env_logger::init();
 
     // Initialize state with default values
     let app_state = web::Data::new(AppStateServerSign {
         message: Mutex::new(message_par),
+network: Mutex::new(network_chain)
     });
 
     let (tx, rx) = mpsc::channel::<SignPayload>();
@@ -86,6 +101,7 @@ pub async fn sign_message_server(message_par: String) -> Result<SignPayload, Str
             .app_data(tx.clone())
             .app_data(shutdown_tx.clone())
             .app_data(web::JsonConfig::default().limit(4096))
+            .service(web::resource("/network").route(web::get().to(get_sign_network)))
             .service(web::resource("/message").route(web::get().to(get_sign_message)))
             .service(web::resource("/auth").route(web::post().to(handle_message_sign_payload)))
             .service(web::resource("/").route(web::get().to(sign_html))) 

@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt::format;
 use std::path::PathBuf;
 use crate::aqua::wallet::{create_ethereum_signature, get_wallet};
@@ -195,8 +196,11 @@ fn perform_server_signing(
         error
     })?;
 
+    let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
+   
+
     let sign_payload = runtime
-        .block_on(async { sign_message_server(last_revision_hash.to_string()).await })
+        .block_on(async { sign_message_server(last_revision_hash.to_string(), chain).await })
         .map_err(|e| {
             let error = format!("Error in server signing: {}", e);
             logs_data.push(error.clone());
