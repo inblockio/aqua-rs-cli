@@ -91,7 +91,7 @@ dependencies = [
  "http 0.2.12",
  "httparse",
  "httpdate",
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "language-tags",
  "local-channel",
  "mime",
@@ -204,7 +204,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "impl-more",
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "language-tags",
  "log",
  "mime",
@@ -407,7 +407,7 @@ dependencies = [
 [[package]]
 name = "aqua-verifier-rs-types"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs-types?branch=main#495735706073f86864ef9a461a80bddc30866f08"
+source = "git+https://github.com/inblockio/aqua-verifier-rs-types?rev=495735706073f86864ef9a461a80bddc30866f08#495735706073f86864ef9a461a80bddc30866f08"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2254,7 +2254,7 @@ checksum = "601cbb57e577e2f5ef5be8e7b83f0f63994f25aa94d673e54a92d5c516d101f1"
 dependencies = [
  "bytes",
  "fnv",
- "itoa 1.0.11",
+ "itoa 1.0.12",
 ]
 
 [[package]]
@@ -2265,7 +2265,7 @@ checksum = "21b9ddb458710bc376481b842f5da65cdf31522de232c1ca8146abce2a358258"
 dependencies = [
  "bytes",
  "fnv",
- "itoa 1.0.11",
+ "itoa 1.0.12",
 ]
 
 [[package]]
@@ -2341,7 +2341,7 @@ dependencies = [
  "http-body 0.4.6",
  "httparse",
  "httpdate",
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -2352,9 +2352,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbff0a806a4728c99295b254c8838933b5b082d75e3cb70c8dab21fdfbcfa9a"
+checksum = "97818827ef4f364230e16705d4706e2897df2bb60617d6ca15d598025a3c481f"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2362,7 +2362,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.1",
  "httparse",
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "pin-project-lite",
  "smallvec",
  "tokio",
@@ -2391,7 +2391,7 @@ checksum = "08afdbb5c31130e3034af566421053ab03787c640246a446327f550d11bcb333"
 dependencies = [
  "futures-util",
  "http 1.1.0",
- "hyper 1.5.0",
+ "hyper 1.5.1",
  "hyper-util",
  "rustls 0.23.17",
  "rustls-pki-types",
@@ -2425,7 +2425,7 @@ dependencies = [
  "futures-util",
  "http 1.1.0",
  "http-body 1.0.1",
- "hyper 1.5.0",
+ "hyper 1.5.1",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -2740,9 +2740,9 @@ checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
 
 [[package]]
 name = "itoa"
-version = "1.0.11"
+version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
+checksum = "7a73e9fe3c49d7afb2ace819fa181a287ce54a0983eda4e0eb05c22f82ffe534"
 
 [[package]]
 name = "jni"
@@ -2799,7 +2799,7 @@ dependencies = [
  "fraction",
  "getrandom 0.2.15",
  "iso8601",
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "memchr",
  "num-cmp",
  "once_cell",
@@ -4168,7 +4168,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.5.0",
+ "hyper 1.5.1",
  "hyper-rustls 0.27.3",
  "hyper-util",
  "ipnet",
@@ -4627,7 +4627,7 @@ version = "1.0.133"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7fceb2473b9166b2294ef05efcb65a3db80803f0b03ef86a5fc88a2b85ee377"
 dependencies = [
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "memchr",
  "ryu",
  "serde",
@@ -4650,7 +4650,7 @@ version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af99884400da37c88f5e9146b7f1fd0fbcae8f6eec4e9da38b67d05486f814a6"
 dependencies = [
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "serde",
 ]
 
@@ -4670,7 +4670,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
 dependencies = [
  "form_urlencoded",
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "ryu",
  "serde",
 ]
@@ -5147,7 +5147,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dfd88e563464686c916c7e46e623e520ddc6d79fa6641390f2e3fa86e83e885"
 dependencies = [
  "deranged",
- "itoa 1.0.11",
+ "itoa 1.0.12",
  "num-conv",
  "powerfmt",
  "serde",
@@ -5494,9 +5494,9 @@ checksum = "7e51b68083f157f853b6379db119d1c1be0e6e4dec98101079dec41f6f5cf6df"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.13"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91b56cd4cadaeb79bbf1a5645f6b4f8dc5bde8834ad5894a8db35fda9efa1fe"
+checksum = "adb9e6ca4f869e1180728b7950e35922a7fc6397f7b641499e8f3ef06e50dc83"
 
 [[package]]
 name = "unicode-width"
@@ -5594,7 +5594,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verifier"
 version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?branch=main#28d528002c54a0aedb659c8cb1b8440147f2bedf"
+source = "git+https://github.com/inblockio/aqua-verifier-rs?rev=5d875e0dd8f7ec1bdcf59347109db8c220098571#5d875e0dd8f7ec1bdcf59347109db8c220098571"
 dependencies = [
  "aqua-verifier-rs-types",
  "async-trait",
