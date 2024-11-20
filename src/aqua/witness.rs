@@ -1,3 +1,4 @@
+use std::fmt::format;
 use std::env;
 use std::path::PathBuf;
 
@@ -7,6 +8,7 @@ use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 use aqua_verifier_rs_types::models::content::RevisionWitnessInput;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use verifier::aqua_verifier::AquaVerifier;
+use verifier::util::get_hash_sum;
 
 pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path: PathBuf) {
     let mut logs_data: Vec<String> = Vec::new();
@@ -76,13 +78,15 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
             .expect("Expected a revision as revision are more than one");
         last_revision_hash = last_rev.metadata.verification_hash.to_string();
     }
-
+    let empty_hash: String = "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26".to_string();
+    let witness_event_verification_string = format!("{}{}", empty_hash, last_revision_hash);
+    let witness_event_verification_hash = get_hash_sum(&witness_event_verification_string);
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
 
 
     // Run the async server in the runtime
     let result: Result<WitnessPayload, String> =
-        runtime.block_on(async { witness_message_server(last_revision_hash, chain).await });
+        runtime.block_on(async { witness_message_server(witness_event_verification_hash, chain).await });
 
     if result.is_err() {
         println!("Signing failed: {:#?}", result.err());
