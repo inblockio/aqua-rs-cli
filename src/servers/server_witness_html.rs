@@ -195,7 +195,7 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
                     address = address_data;
                 }
 
-                const contract_address = "0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611";//ETH_CHAIN_ADDRESSES_MAP[appState.config.chain]
+                let contract_address = "0x45f59310ADD88E6d23ca58A0Fa7A55BEE6d2a611";//ETH_CHAIN_ADDRESSES_MAP[appState.config.chain]
 
 
                 let chain_address = getChainAddress("sepolia");
