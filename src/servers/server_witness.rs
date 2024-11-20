@@ -97,8 +97,8 @@ pub async fn witness_message_server(
     network: String,
 ) -> Result<WitnessPayload, String> {
     println!(
-        "witness_message_server :: Previous  {}",
-        previous_verification_hash
+        "witness_message_server :: hash  {} network {}",
+        previous_verification_hash , network
     );
     env_logger::init();
 

@@ -1,18 +1,16 @@
+use crate::models::{ResponseMessage, SignMessage, SignOrWitnessNetwork, SignPayload};
+use crate::servers::server_sign_html::SIGN_HTML;
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
-use std::sync::{mpsc,  Mutex};
+use std::sync::{mpsc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
-use crate::servers::server_sign_html::SIGN_HTML;
-use crate::models::{SignPayload, ResponseMessage, SignMessage, SignOrWitnessNetwork};
-
-
 
 // Changed to use Default derive
 #[derive(Debug, Default)]
 struct AppStateServerSign {
     message: Mutex<String>,
-    network : Mutex<String>
+    network: Mutex<String>,
 }
 
 async fn get_sign_network(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
@@ -26,7 +24,6 @@ async fn get_sign_network(data: web::Data<AppStateServerSign>) -> Result<HttpRes
 
     Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { network }))
 }
-
 
 async fn get_sign_message(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
     let nonce = SystemTime::now()
@@ -64,20 +61,28 @@ async fn handle_message_sign_payload(
 }
 
 // Handler for serving the index.html
-async fn sign_html() ->  Result<HttpResponse, Error> {
+async fn sign_html() -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(SIGN_HTML))
 }
 
 // #[actix_web::main]
-pub async fn sign_message_server(message_par: String, network_chain: String) -> Result<SignPayload, String> {
+pub async fn sign_message_server(
+    message_par: String,
+    network_chain: String,
+) -> Result<SignPayload, String> {
+    println!(
+        "sign_message_server :: message_par  {} network {}",
+        message_par, network_chain
+    );
+
     env_logger::init();
 
     // Initialize state with default values
     let app_state = web::Data::new(AppStateServerSign {
         message: Mutex::new(message_par),
-network: Mutex::new(network_chain)
+        network: Mutex::new(network_chain),
     });
 
     let (tx, rx) = mpsc::channel::<SignPayload>();
@@ -86,8 +91,6 @@ network: Mutex::new(network_chain)
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
     let shutdown_tx = web::Data::new(shutdown_tx.clone());
     let mut shutdown_rx = shutdown_tx.subscribe();
-
-    
 
     println!("Starting server on http://localhost:8080");
 
@@ -104,17 +107,17 @@ network: Mutex::new(network_chain)
             .service(web::resource("/network").route(web::get().to(get_sign_network)))
             .service(web::resource("/message").route(web::get().to(get_sign_message)))
             .service(web::resource("/auth").route(web::post().to(handle_message_sign_payload)))
-            .service(web::resource("/").route(web::get().to(sign_html))) 
-            // .service(Files::new("/", "./static").index_file("index.html"))
+            .service(web::resource("/").route(web::get().to(sign_html)))
+        // .service(Files::new("/", "./static").index_file("index.html"))
     })
     .bind("127.0.0.1:8080");
-    
+
     if server_bind.is_err() {
         return Err(format!("Unable to bind {:#?}", server_bind.err()));
     }
-    let server_obj =  server_bind.unwrap();
+    let server_obj = server_bind.unwrap();
 
-   let server =  server_obj.run();
+    let server = server_obj.run();
 
     let srv = server.handle();
 
@@ -125,12 +128,8 @@ network: Mutex::new(network_chain)
         srv.stop(true).await;
     });
 
-
     match server.await {
-        Ok(_) => {
-            rx.recv()
-                .map_err(|e| e.to_string())
-        }
+        Ok(_) => rx.recv().map_err(|e| e.to_string()),
         Err(e) => Err(e.to_string()),
     }
 }
