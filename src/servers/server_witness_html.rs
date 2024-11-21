@@ -279,7 +279,7 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
                     }
 
                     const result = await response.json();
-                    showStatus('Signing successful!, closing the tab in 2 seconds');
+                    showStatus('Witness successful!, closing the tab in 2 seconds');
 
                     setTimeout(() => {
                         window.close()

@@ -14,7 +14,7 @@ serde = "1.0.210"
 serde_json_path_to_error = "0.1.4"
 serde_json = "1.0"
 # verifier = { git = "https://github.com/inblockio/aqua-verifier-rs", branch = "main" }
-verifier = { git = "https://github.com/inblockio/aqua-verifier-rs", rev = "5d875e0dd8f7ec1bdcf59347109db8c220098571" }
+verifier = { git = "https://github.com/inblockio/aqua-verifier-rs", rev = "9d79595b302b5512ba056dbbcdc433f8ef013d4a" }
 # aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-types", branch = "main" }
 aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-types", rev = "495735706073f86864ef9a461a80bddc30866f08" }
 tracing = "0.1"

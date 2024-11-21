@@ -207,6 +207,8 @@ fn main() {
     let api_key = env::var("api_key").unwrap_or("".to_string());
     let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
 
+    println!("verification_platform  {} and api key {}  ", verification_platform, api_key);
+
     let option = VerificationOptions {
         version: 1.2,
         strict: false,

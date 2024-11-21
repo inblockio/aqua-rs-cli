@@ -12,6 +12,7 @@ pub fn  cli_verify_chain(args : CliArgs, aqua_verifier : AquaVerifier, verify_pa
     let mut logs_data: Vec<String> = Vec::new();
 
     println!("Verifying file: {:?}", verify_path);
+    
     // Verify the file
     let res: Result<PageData, String> = read_aqua_data(&verify_path);
     // file reading error
