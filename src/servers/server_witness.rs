@@ -8,58 +8,87 @@ use tokio::sync::broadcast;
 use crate::models::{ResponseMessage, SignMessage, WitnessPayload, SignOrWitnessNetwork};
 use crate::servers::server_witness_html::WITNESS_HTML;
 
-// Changed to use Default derive
+/// Represents the application state for the witness message server.
+///
+/// This struct holds the current message and network information 
+/// using thread-safe mutexes to allow concurrent access.
+///
+/// # Fields
+/// * `message`: A mutex-protected string containing the verification hash
+/// * `network`: A mutex-protected string representing the blockchain network
 #[derive(Debug, Default)]
 struct AppStateServerWitness {
+    /// The verification hash to be witnessed, protected by a mutex
     message: Mutex<String>,
+    /// The network chain, protected by a mutex 
     network: Mutex<String>,
 }
 
-
-
-
+/// Retrieves the current network for witnessing.
+///
+/// # Arguments
+/// * `data` - The application state containing the network information
+///
+/// # Returns
+/// A JSON response with the current network or an internal server error
+///
+/// # Errors
+/// Returns an error if the mutex lock cannot be acquired or if accessing the network fails
 async fn get_witness_network(
     data: web::Data<AppStateServerWitness>,
 ) -> Result<HttpResponse, Error> {
+    // Attempt to acquire the network mutex lock
     let network_res = data
         .network
         .lock()
         .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
    
+    // Panic if unable to get the network (alternative error handling)
     if network_res.is_err() {
         panic!("unable to get previous verification hash from server state");
     }
 
+    // Safely extract the network value
     let network_guard: MutexGuard<'_, String> = network_res.unwrap();
-    // Clone the String value from inside the MutexGuard
     let network_value = network_guard.clone();
-    // Or if you just need to reference the String:
-    // let network_value = network_guard.as_str();
 
     Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { 
         network: network_value 
     }))
 }
 
+/// Generates a witness message with a unique nonce.
+///
+/// # Arguments
+/// * `data` - The application state containing the message to be witnessed
+///
+/// # Returns
+/// A JSON response with the witness message and a timestamp nonce
+///
+/// # Errors
+/// Returns an error if the mutex lock cannot be acquired or if accessing the message fails
 async fn get_witness_message(
     data: web::Data<AppStateServerWitness>,
 ) -> Result<HttpResponse, Error> {
+    // Generate a unique nonce based on current system time
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis()
         .to_string();
 
+    // Attempt to acquire the message mutex lock
     let msg = data
         .message
         .lock()
         .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
+    
+    // Panic if unable to get the message (alternative error handling)
     if msg.is_err() {
         panic!("unable to get previous verification hash from server state");
     }
 
-    // let message =         format!("I sign the following page verification_hash: [0x{}]", msg.unwrap());
-
+    // Construct the message
     let message = format!("{}", msg.unwrap());
 
     println!("From get message the message to be signed ->  {}", message);
@@ -67,6 +96,18 @@ async fn get_witness_message(
     Ok(HttpResponse::Ok().json(SignMessage { message, nonce }))
 }
 
+/// Handles the witness payload submission.
+///
+/// # Arguments
+/// * `payload` - The JSON payload containing witnessing information
+/// * `tx` - A channel sender to pass the payload for processing
+/// * `shutdown_tx` - A broadcast channel to trigger server shutdown
+///
+/// # Returns
+/// A success response if the payload is processed successfully
+///
+/// # Errors
+/// Returns an error if the payload cannot be sent or processed
 async fn handle_witness_payload(
     payload: web::Json<WitnessPayload>,
     tx: web::Data<mpsc::Sender<WitnessPayload>>,
@@ -74,9 +115,11 @@ async fn handle_witness_payload(
 ) -> Result<HttpResponse, Error> {
     println!("Received auth request with payload: {:?}", payload);
 
+    // Send the payload through the channel
     tx.send(payload.into_inner())
         .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to send payload"))?;
 
+    // Trigger server shutdown
     let _ = shutdown_tx.send(());
 
     Ok(HttpResponse::Ok().json(ResponseMessage {
@@ -84,14 +127,38 @@ async fn handle_witness_payload(
     }))
 }
 
-// Handler for serving the index.html
+/// Serves the HTML page for witnessing.
+///
+/// # Returns
+/// The HTML content for the witnessing page
+///
+/// # Errors
+/// Returns an error if the HTML content cannot be served
 async fn witness_html() -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(WITNESS_HTML))
 }
 
-// #[actix_web::main]
+/// Starts a web server for message witnessing.
+///
+/// # Arguments
+/// * `previous_verification_hash` - The verification hash to be witnessed
+/// * `network` - The blockchain network for witnessing
+///
+/// # Returns
+/// The witnessed payload if successful, or an error message
+///
+/// # Errors
+/// Returns an error if the server cannot be started or bound
+///
+/// # Behavior
+/// 1. Initializes logging
+/// 2. Creates an application state with the provided verification hash and network
+/// 3. Sets up a communication channel for payload processing
+/// 4. Starts an Actix web server with CORS and logging middleware
+/// 5. Opens a web browser to the server URL
+/// 6. Waits for the witnessing process to complete
 pub async fn witness_message_server(
     previous_verification_hash: String,
     network: String,
@@ -100,6 +167,8 @@ pub async fn witness_message_server(
         "witness_message_server :: hash  {} network {}",
         previous_verification_hash , network
     );
+    
+    // Initialize logging
     env_logger::init();
 
     // Initialize state with default values
@@ -108,6 +177,7 @@ pub async fn witness_message_server(
         network: Mutex::new(network),
     });
 
+    // Create channels for payload processing and server shutdown
     let (tx, rx) = mpsc::channel::<WitnessPayload>();
     let tx = web::Data::new(tx);
 
@@ -117,11 +187,12 @@ pub async fn witness_message_server(
 
     println!("Starting server on http://localhost:8080");
 
+    // Configure the Actix web server
     let server_bind = HttpServer::new(move || {
         let cors = Cors::permissive();
 
         App::new()
-            .app_data(app_state.clone()) // Changed to use app_data directly
+            .app_data(app_state.clone())
             .wrap(cors)
             .wrap(middleware::Logger::default())
             .app_data(tx.clone())
@@ -131,41 +202,30 @@ pub async fn witness_message_server(
             .service(web::resource("/message").route(web::get().to(get_witness_message)))
             .service(web::resource("/auth").route(web::post().to(handle_witness_payload)))
             .service(web::resource("/").route(web::get().to(witness_html)))
-
-        // .service(Files::new("/", "./static").index_file("witness.html"))
     })
     .bind("127.0.0.1:8080");
 
+    // Handle server binding errors
     if server_bind.is_err() {
         return Err(format!("Unable to bind {:#?}", server_bind.err()));
     }
     let server_obj = server_bind.unwrap();
 
+    // Run the server
     let server = server_obj.run();
 
     let srv = server.handle();
 
+    // Open the default web browser to the server URL
     webbrowser::open("http://localhost:8080").unwrap();
 
+    // Spawn a task to handle server shutdown
     tokio::spawn(async move {
         let _ = shutdown_rx.recv().await;
         srv.stop(true).await;
     });
 
-    // server.await?;
-
-    // if let Ok(auth_payload) = rx.recv() {
-    //     println!("Received auth payload:");
-    //     println!("Signature: {}", auth_payload.signature);
-    //     println!("Public Key: {}", auth_payload.public_key);
-    //     println!("Wallet Address: {}", auth_payload.wallet_address);
-
-    //     Ok(auth_payload);
-    // }
-    // Err("Server error ".to_string())
-
-    // Ok(())
-
+    // Wait for the server to complete and return the payload
     match server.await {
         Ok(_) => rx.recv().map_err(|e| e.to_string()),
         Err(e) => Err(e.to_string()),

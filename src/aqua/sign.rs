@@ -1,5 +1,4 @@
 use std::env;
-use std::fmt::format;
 use std::path::PathBuf;
 use crate::aqua::wallet::{create_ethereum_signature, get_wallet};
 use crate::models::{CliArgs, SecreatKeys, SignPayload};

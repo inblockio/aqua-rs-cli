@@ -8,7 +8,7 @@ Ensure to use the same version as the Aqua protocol version you are using for ex
 in your environment set the following variables.
     1. aqua_domain="random_alphanumeric" (if none is specified one is genrated)
     2. aqua_network="sepolia" or  "holesky" or "mainnet" (default is sepolia)
-    3. verification_platform="alchemy" or "infura" or "none" for witnessing  (optional) default is none
+    3. verification_platform="alchemy" or "infura" or  "self" or "none" for witnessing . self scraps the etherscan.io (avoid if possible) (optional) default is none
     4. chain="sepolia" or "mainnet" or "holesky" for witnessing  (optional) default is none
     5. api_key=  the alchemy key or infura api key (optional)
     6. keys_file = pathe to json file with similar contents as thos in keys.sample.json use a wallet without metemask

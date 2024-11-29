@@ -2,6 +2,7 @@ pub mod aqua;
 pub mod models;
 pub mod servers;
 pub mod utils;
+pub mod tests;
 
 use crate::models::CliArgs;
 use aqua::sign::cli_sign_chain;
