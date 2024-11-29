@@ -35,8 +35,8 @@ COMMANDS:
    • -v or --verbose  to provide logs about the  process when using  -v,-s,-w or -f command (verbose option).
    • -o or --output to save the output to a file (json, html or pdf).
    • -l  or --level  define how strict the validation should be 1 or 2
-        1: Strict validation
-        2: Standard validation 
+        1: Strict validation (does look up, if local wallet mnemonic fails it panic)
+        2: Standard validation (create a new mnemonic if one in keys.json faile)
    • -h or --help to show usage, about aqua-cli.
    • -i or --info to show the cli version.
    • -k or --key-file to specify the file containings  (this can also be set in the env  )

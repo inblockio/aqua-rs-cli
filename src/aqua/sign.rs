@@ -1,11 +1,11 @@
-use std::env;
-use std::path::PathBuf;
 use crate::aqua::wallet::{create_ethereum_signature, get_wallet};
 use crate::models::{CliArgs, SecreatKeys, SignPayload};
 use crate::servers::server_sign::sign_message_server;
 use crate::utils::{read_aqua_data, read_secreat_keys, save_logs_to_file, save_page_data};
 use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
+use std::env;
+use std::path::PathBuf;
 use verifier::aqua_verifier::AquaVerifier;
 
 /// Represents the result of extracting chain data
@@ -22,7 +22,7 @@ struct SigningResult {
 }
 
 /// Main function to handle the CLI signing chain process
-/// 
+///
 /// # Arguments
 /// * `args` - CLI arguments
 /// * `aqua_verifier` - Instance of AquaVerifier
@@ -35,7 +35,10 @@ pub(crate) fn cli_sign_chain(
     keys_file: Option<PathBuf>,
 ) {
     let mut logs_data: Vec<String> = Vec::new();
-    logs_data.push(format!("Starting signing process for file: {:?}", sign_path));
+    logs_data.push(format!(
+        "Starting signing process for file: {:?}",
+        sign_path
+    ));
 
     match process_signing_chain(&args, aqua_verifier, &sign_path, keys_file, &mut logs_data) {
         Ok(_) => {
@@ -59,8 +62,8 @@ fn process_signing_chain(
 ) -> Result<(), String> {
     let aqua_page_data = read_and_validate_data(sign_path, logs_data)?;
     let chain_data = extract_chain_data(&aqua_page_data, logs_data)?;
-    let sign_result = perform_signing(&chain_data.last_revision_hash, keys_file, logs_data)?;
-    
+    let sign_result = perform_signing(&chain_data.last_revision_hash, keys_file, logs_data, args)?;
+
     let rev_sig = RevisionContentSignature {
         signature: sign_result.signature,
         wallet_address: sign_result.wallet_address,
@@ -133,11 +136,12 @@ fn perform_signing(
     last_revision_hash: &str,
     keys_file: Option<PathBuf>,
     logs_data: &mut Vec<String>,
+    args: &CliArgs,
 ) -> Result<SigningResult, String> {
     logs_data.push("Info : Starting signing process...".to_string());
 
     if let Some(keys_path) = keys_file {
-        perform_local_signing(last_revision_hash, keys_path, logs_data)
+        perform_local_signing(last_revision_hash, keys_path, logs_data, args)
     } else {
         perform_server_signing(last_revision_hash, logs_data)
     }
@@ -148,6 +152,7 @@ fn perform_local_signing(
     last_revision_hash: &str,
     keys_path: PathBuf,
     logs_data: &mut Vec<String>,
+    args: &CliArgs,
 ) -> Result<SigningResult, String> {
     logs_data.push("Info : Performing local signing...".to_string());
 
@@ -163,11 +168,20 @@ fn perform_local_signing(
         error
     })?;
 
-    let (address, public_key, private_key) = get_wallet(&mnemonic).map_err(|e| {
-        let error = format!("Error : getting wallet: {}", e);
-        logs_data.push(error.clone());
-        error
-    })?;
+    let gen_wallet_on_fail = if args.level.is_none() {
+        true
+    } else if args.level.as_ref().unwrap().trim() == "1".to_string() {
+        false
+    } else {
+        true
+    };
+
+    let (address, public_key, private_key) =
+        get_wallet(&mnemonic, gen_wallet_on_fail).map_err(|e| {
+            let error = format!("Error : getting wallet: {}", e);
+            logs_data.push(error.clone());
+            error
+        })?;
 
     let signature = create_ethereum_signature(&private_key, last_revision_hash).map_err(|e| {
         let error = format!("Error : creating signature: {}", e);
@@ -196,7 +210,6 @@ fn perform_server_signing(
     })?;
 
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
-   
 
     let sign_payload = runtime
         .block_on(async { sign_message_server(last_revision_hash.to_string(), chain).await })
@@ -224,7 +237,7 @@ fn process_verification_and_save(
     logs_data.push("Info : Processing verification and saving results...".to_string());
 
     // println!("Error cause {:#?} ",rev_sig);
-    
+
     let (res_page_data, res_logs) = aqua_verifier
         .sign_aqua_chain(aqua_page_data, rev_sig)
         .map_err(|errors| {

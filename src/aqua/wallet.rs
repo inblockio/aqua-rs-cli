@@ -17,15 +17,21 @@ fn generate_mnemonic() -> Result<String> {
     Ok(mnemonic.phrase().to_string())
 }
 
-pub(crate) fn get_wallet(mnemonic_str: &str) -> Result<(String, String, String)> {
+pub(crate) fn get_wallet(mnemonic_str: &str, on_fail_gen_mnemonic : bool) -> Result<(String, String, String)> {
     // Parse mnemonic
     let mnemonic = match Mnemonic::new(mnemonic_str.trim(), Language::English) {
         Ok(m) => m,
         Err(_) => {
-            // If parsing fails, generate a new mnemonic
+            if on_fail_gen_mnemonic{
+                // If parsing fails, generate a new mnemonic
             let new_mnemonic = generate_mnemonic()?;
-            println!("Generated new mnemonic: {}", new_mnemonic);
+            println!("=============================================");
+            println!(" \n\n Generated new mnemonic: {} \n\n", new_mnemonic);
+            println!("=============================================");
             Mnemonic::new(new_mnemonic.trim(), Language::English)?
+            }else{
+                panic!("Unable to parse mnemonic , set to generate mnemonic by changing level")
+            }
         }
     };
     
