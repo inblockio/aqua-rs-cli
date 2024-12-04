@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use verifier::model::ResultStatusEnum;
-use verifier::aqua_verifier::AquaVerifier;
+use aqua_verifier::model::ResultStatusEnum;
+use aqua_verifier::aqua_verifier::AquaVerifier;
 
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file};

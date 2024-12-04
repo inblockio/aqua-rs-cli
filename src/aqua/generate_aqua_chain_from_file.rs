@@ -2,7 +2,7 @@ use std::fs;
 
 use crate::models::CliArgs;
 use crate::utils::{save_logs_to_file, save_page_data};
-use verifier::aqua_verifier::AquaVerifier;
+use aqua_verifier::aqua_verifier::AquaVerifier;
 
 /// Generates an Aqua chain from a given file using the provided CLI arguments and Aqua verifier.
 ///

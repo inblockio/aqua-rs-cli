@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use aqua_verifier_rs_types::models::page_data::PageData;
-use verifier::aqua_verifier::AquaVerifier;
+use aqua_verifier::aqua_verifier::AquaVerifier;
 
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};

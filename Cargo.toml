@@ -1,7 +1,19 @@
 [package]
 name = "aqua-cli" #"aqua-verifier-cli"
-version = "0.1.0"
+authors=["dalmasonto<https://github.com/dalmasonto>","Arthur-Kamau<https://github.com/Arthur-Kamau>" ]
+version = "1.2.0"
 edition = "2021"
+license-file = "LICENCE"
+description = "Aqua protocol command line tool that enable you to verify, sign and witness aqua chains."
+readme = "README.md" 
+keywords = ["aqua", "aqua-protocol"] # Keywords for crates.io search
+categories = ["development-tools", "command-line-utilities"] # Categories on crates.io
+repository = "https://github.com/inblockio/aqua-cli"      # Source repository
+homepage = "https://github.com/inblockio/aqua-cli"                   # Project homepage
+documentation = "https://docs.rs/aqua-cli"                   # Documentation URL
+exclude = ["target", "*.lock", ".vscode", ".idea"]    # Files or directories to exclude from the package
+
+
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
@@ -13,10 +25,8 @@ sha3 = "0.10.8"
 serde = "1.0.210"
 serde_json_path_to_error = "0.1.4"
 serde_json = "1.0"
-# verifier = { git = "https://github.com/inblockio/aqua-verifier-rs", branch = "main" }
-verifier = { git = "https://github.com/inblockio/aqua-verifier-rs", rev = "6f9461c25b657c61dd49eeec5eed5a63153a4028" }
-# aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-types", branch = "main" }
-aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-types", rev = "495735706073f86864ef9a461a80bddc30866f08" }
+aqua-verifier="1.2.0"
+aqua-verifier-rs-types = "1.2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 console = "0.15"
@@ -38,3 +48,9 @@ eyre = "0.6"
 bip32 = "0.5"
 k256 = { version = "0.13", features = ["ecdsa"] }
 tempfile = "3.3"
+
+
+# Specify the binary target
+[[bin]]
+name = "aqua-cli" # This will be the command-line executable name
+path = "src/main.rs"

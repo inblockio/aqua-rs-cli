@@ -6,8 +6,8 @@ use crate::servers::server_witness::witness_message_server;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 use aqua_verifier_rs_types::models::content::RevisionWitnessInput;
 use aqua_verifier_rs_types::models::page_data::PageData;
-use verifier::aqua_verifier::AquaVerifier;
-use verifier::util::get_hash_sum;
+use aqua_verifier::aqua_verifier::AquaVerifier;
+use aqua_verifier::util::get_hash_sum;
 
 /// Generates a witness chain for an Aqua file using the provided CLI arguments and Aqua verifier.
 ///

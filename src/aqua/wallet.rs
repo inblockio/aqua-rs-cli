@@ -5,7 +5,7 @@ use k256::{
     elliptic_curve::sec1::ToEncodedPoint,
 };
 use tiny_keccak::{Keccak, Hasher};
-use std::{fmt::format, str::FromStr};
+use std::str::FromStr;
 use eyre::Result;
 use sha3::{Keccak256, Digest};
 

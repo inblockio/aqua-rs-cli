@@ -15,8 +15,8 @@ use aqua::{
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{env, path::PathBuf};
-use utils::{is_valid_file, is_valid_json_file, is_valid_output_file, string_to_bool};
-use verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
+use utils::{is_valid_file, is_valid_json_file, is_valid_output_file};
+use aqua_verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 

@@ -369,11 +369,12 @@ checksum = "4c95c10ba0b00a02636238b814946408b1322d5ac4760326e6fb8ec956d85775"
 
 [[package]]
 name = "aqua-cli"
-version = "0.1.0"
+version = "1.2.0"
 dependencies = [
  "actix-cors",
  "actix-files",
  "actix-web",
+ "aqua-verifier",
  "aqua-verifier-rs-types",
  "base64 0.22.1",
  "bip32",
@@ -400,15 +401,43 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "verifier",
  "warp",
  "webbrowser",
 ]
 
 [[package]]
+name = "aqua-verifier"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a24c25636a4da98215618c590d12304aed33ba1da38b63e026f89d3a331b8cec"
+dependencies = [
+ "aqua-verifier-rs-types",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "ethaddr",
+ "ethereum-types",
+ "ethers",
+ "eyre",
+ "flagset",
+ "futures",
+ "hex",
+ "jsonschema",
+ "libsecp256k1",
+ "regex",
+ "reqwest 0.11.27",
+ "scraper",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tokio",
+]
+
+[[package]]
 name = "aqua-verifier-rs-types"
-version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs-types?rev=495735706073f86864ef9a461a80bddc30866f08#495735706073f86864ef9a461a80bddc30866f08"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3beaceea8e694557045d2e40f7fee8b1a0881f52e62b4f0cec3df2f86fbf1eb"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5591,33 +5620,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "verifier"
-version = "0.1.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?rev=6f9461c25b657c61dd49eeec5eed5a63153a4028#6f9461c25b657c61dd49eeec5eed5a63153a4028"
-dependencies = [
- "aqua-verifier-rs-types",
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "ethaddr",
- "ethereum-types",
- "ethers",
- "eyre",
- "flagset",
- "futures",
- "hex",
- "jsonschema",
- "libsecp256k1",
- "regex",
- "reqwest 0.11.27",
- "scraper",
- "serde",
- "serde_json",
- "sha3",
- "tokio",
-]
 
 [[package]]
 name = "version_check"
