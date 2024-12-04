@@ -1,15 +1,15 @@
 [package]
 name = "aqua-cli" #"aqua-verifier-cli"
 authors=["dalmasonto<https://github.com/dalmasonto>","Arthur-Kamau<https://github.com/Arthur-Kamau>" ]
-version = "1.2.0"
+version = "1.2.1"
 edition = "2021"
 license-file = "LICENCE"
 description = "Aqua protocol command line tool that enable you to verify, sign and witness aqua chains."
 readme = "README.md" 
 keywords = ["aqua", "aqua-protocol"] # Keywords for crates.io search
 categories = ["development-tools", "command-line-utilities"] # Categories on crates.io
-repository = "https://github.com/inblockio/aqua-cli"      # Source repository
-homepage = "https://github.com/inblockio/aqua-cli"                   # Project homepage
+repository = "https://github.com/inblockio/aqua-cli-rs"      # Source repository
+homepage = "https://github.com/inblockio/aqua-cli-rs"                   # Project homepage
 documentation = "https://docs.rs/aqua-cli"                   # Documentation URL
 exclude = ["target", "*.lock", ".vscode", ".idea"]    # Files or directories to exclude from the package
 
