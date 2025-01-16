@@ -15,7 +15,7 @@ use clap::{Arg, ArgAction, ArgGroup, Command};
 use std::{env, path::PathBuf};
 use utils::{is_valid_file, is_valid_json_file, is_valid_output_file};
 
-const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
+const BASE_LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
 ========================================================
 
@@ -51,7 +51,7 @@ EXAMPLES:
     aqua-cli -f document.json --output report.json
 
     aqua-cli file.json --link file2.json
-    aqua-cli --scalar
+    aqua-cli --scalar file.json
 
 SUMMARY
    * aqua-cli expects at least one parameter -s,-v,-w or -f.
@@ -64,11 +64,16 @@ SUMMARY
 For more information, visit: https://github.com/inblockio/aqua-verifier-cli"#;
 
 pub fn parse_args() -> Result<CliArgs, String> {
+    let long_about = format!(
+        "{}\n\nVersion: {}",
+        BASE_LONG_ABOUT,
+        env!("CARGO_PKG_VERSION")
+    );
     let matches = Command::new("aqua-cli")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
-        .long_about(LONG_ABOUT)
+        .long_about(long_about)
         .about("🔐 Aqua CLI Tool - Validates, Verifies, Signs, Witness aqua chain file and generates aqua chain files using aqua protocol")
         .arg(
             Arg::new("authenticate")
@@ -253,7 +258,6 @@ pub fn parse_args() -> Result<CliArgs, String> {
 }
 
 fn main() {
-    println!("hi");
     dotenv::dotenv().ok();
 
     let args = parse_args().unwrap_or_else(|err| {
@@ -262,7 +266,7 @@ fn main() {
     });
 
     if args.info {
-        println!("{}", LONG_ABOUT);
+        println!("{}", BASE_LONG_ABOUT);
         return;
     }
 
@@ -274,7 +278,7 @@ fn main() {
         && args.link.is_none()
         && args.delete.is_none()
     {
-        println!("{}", LONG_ABOUT);
+        println!("{}", BASE_LONG_ABOUT);
         return;
     }
 
