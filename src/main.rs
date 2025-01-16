@@ -1,22 +1,20 @@
 pub mod aqua;
 pub mod models;
-pub mod servers;
-pub mod utils;
 pub mod tests;
+pub mod utils;
 
 use crate::models::CliArgs;
-use aqua::sign::cli_sign_chain;
-use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
 use aqua::{
     delete_revision_from_aqua_chain::cli_remove_revisions_from_aqua_chain,
     generate_aqua_chain_from_file::cli_generate_aqua_chain,
 };
+use aqua_verifier::aqua::AquaProtocol;
+use aqua_verifier::model::aqua_protocol_options::AquaProtocolOptions;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{env, path::PathBuf};
 use utils::{is_valid_file, is_valid_json_file, is_valid_output_file};
-use aqua_verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -172,7 +170,6 @@ pub fn parse_args() -> Result<CliArgs, String> {
     }
     let mut remove_count = 1;
     if remove_count_string.is_some() {
-       
         remove_count = remove_count_string.unwrap_or(1);
     }
 
@@ -201,25 +198,29 @@ fn main() {
         .collect();
 
     // Check if API_DOMAIN is set
-    let aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
+    // let aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
     // let aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
-    let verification_platform: String = env::var("verification_platform").unwrap_or("none".to_string());
+    let verification_platform: String =
+        env::var("verification_platform").unwrap_or("none".to_string());
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
     let api_key = env::var("api_key").unwrap_or("".to_string());
     let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
 
-    println!("verification_platform  {} and api key {}  ", verification_platform, api_key);
+    println!(
+        "verification_platform  {} and api key {}  ",
+        verification_platform, api_key
+    );
 
-    let option = VerificationOptions {
-        version: 1.2,
+    let option = AquaProtocolOptions {
+        version: 1.3,
         strict: false,
         allow_null: false,
         verification_platform: verification_platform,
-        chain: chain,
-        api_key: api_key,
+        verification_platform_key: api_key,
+        chain_network: chain,
     };
 
-    let aqua_verifier = AquaVerifier::new(Some(option));
+    let aqua_protocol = AquaProtocol::new(option);
 
     let args = parse_args().unwrap_or_else(|err| {
         eprintln!("Error: {}", err);
@@ -258,15 +259,21 @@ fn main() {
         args.clone().file.is_some(),
         args.clone().remove.is_some(),
     ) {
-        (Some(verify_path), _, _, _, _) => cli_verify_chain(args, aqua_verifier, verify_path),
-        (_, Some(sign_path), _, _, _) => cli_sign_chain(args, aqua_verifier, sign_path, keys_file),
-        (_, _, Some(witness_path), _, _) => {
-            cli_winess_chain(args.clone(), aqua_verifier, witness_path)
+        (Some(verify_path), _, _, _, _) => {
+            // cli_verify_chain(args, aqua_verifier, verify_path);
         }
-        (_, _, _, true, _) => cli_generate_aqua_chain(args.clone(), aqua_verifier, aqua_domain),
+        (_, Some(sign_path), _, _, _) => {
+            //aqua_protocol.sign_chain() //cli_sign_chain(args, aqua_verifier, sign_path, keys_file),
+        }
+        (_, _, Some(witness_path), _, _) => {
+            cli_winess_chain(args.clone(), aqua_protocol, witness_path)
+        }
+        (_, _, _, true, _) => {
+            cli_generate_aqua_chain(args.clone(), aqua_protocol);
+        }
         (_, _, _, _, true) => cli_remove_revisions_from_aqua_chain(
             args.clone(),
-            aqua_verifier,
+            aqua_protocol,
             args.clone()
                 .remove
                 .expect("aqua chain file to delete revision"),

@@ -25,8 +25,11 @@ sha3 = "0.10.8"
 serde = "1.0.210"
 serde_json_path_to_error = "0.1.4"
 serde_json = "1.0"
-aqua-verifier="1.2.0"
-aqua-verifier-rs-types = "1.2.0"
+# aqua-verifier="1.2.0"
+# aqua-verifier-rs-types = "1.2.0"
+aqua-verifier-rs-types = { git = "https://github.com/inblockio/aqua-verifier-rs-types", rev = "29732da894c191aefd7781cc91fcb84664144033" }
+aqua-verifier = { git = "https://github.com/inblockio/aqua-verifier-rs", rev = "2a5c440e251ac1fa4510ac2c432f14b4331bf734" }
+
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 console = "0.15"
