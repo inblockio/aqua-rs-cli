@@ -4,6 +4,9 @@ pub mod tests;
 pub mod utils;
 
 use crate::models::{CliArgs, SignType, WitnessType};
+use aqua::revisions::cli_generate_scalar_revision;
+use aqua::sign::cli_sign_chain;
+use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
 use aqua::{
     revisions::cli_remove_revisions_from_aqua_chain,
@@ -61,7 +64,9 @@ SUMMARY
     3. verification_platform="alchemy" or "infura" or "none" for witnessing (default "none").
     4. aqua_alchemy_look_up= false or true.
 
-For more information, visit: https://github.com/inblockio/aqua-verifier-cli"#;
+For more information, visit: https://github.com/inblockio/aqua-cli-rs
+
+"#;
 
 pub fn parse_args() -> Result<CliArgs, String> {
     let long_about = format!(
@@ -191,10 +196,11 @@ pub fn parse_args() -> Result<CliArgs, String> {
         )
         .arg(
             Arg::new("link")
-                .long("link")
-                .action(ArgAction::Set)
-                .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
-                .help("Link files (requires a filename or path as parameter)"),
+            .long("link")
+            .action(ArgAction::Set)
+            .num_args(2) // Accept exactly two arguments for linking
+            .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
+            .help("Link two files (requires two filenames or paths as parameters)"),
         )
         .group(
             ArgGroup::new("operation")
@@ -235,7 +241,11 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .get_one::<String>("keys_file")
         .map(|p| PathBuf::from(p));
     let delete = matches.get_one::<String>("delete").map(|p| PathBuf::from(p));
-    let link = matches.get_one::<String>("link").map(|p| PathBuf::from(p));
+    // let link = matches.get_one::<String>("link").map(|p| PathBuf::from(p));
+    let link = matches
+    .get_many::<String>("link")
+    .map(|vals| vals.map(PathBuf::from).collect());
+
     let scalar = matches.get_one::<String>("scalar").map(|p| PathBuf::from(p));
     let info = matches.get_flag("info");
 
@@ -282,44 +292,90 @@ fn main() {
         return;
     }
 
+
+    // let aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
+    let verification_platform: String =
+        env::var("verification_platform").unwrap_or("none".to_string());
+    let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
+    let api_key = env::var("api_key").unwrap_or("".to_string());
+    let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
+
+    let option = AquaProtocolOptions {
+        version: 1.3,
+        strict: false,
+        allow_null: false,
+        verification_platform: verification_platform,
+        verification_platform_key: api_key,
+        chain_network: chain,
+    };
+
+    let aqua_protocol = AquaProtocol::new(option);
+    let mut keys_file: Option<PathBuf> = None;
+    // attempt to read aregiument keys , if none attempt to rread from environment variables
+    if args.clone().keys_file.is_none() {
+        if !keys_file_env.is_empty() {
+            let res = is_valid_json_file(&keys_file_env);
+            if res.is_ok() {
+                println!("Reading keys file from env");
+                keys_file = Some(PathBuf::from(keys_file_env))
+            } else {
+                panic!("Error with key file provided in the env {:#?}", res.err())
+            }
+        }
+    } else {
+        println!("Reading keys file from arguments");
+        keys_file = args.clone().keys_file;
+    }
     
     match (
-        args.authenticate,
-        args.sign,
-        args.sign_type,
-        args.witness,
-        args.witness_type,
-        args.file,
-        args.scalar,
-        args.link,
-        args.delete,
+        &args.authenticate,
+        &args.sign,
+        &args.sign_type,
+        &args.witness,
+        &args.witness_type,
+        &args.file,
+        &args.scalar,
+        &args.link,
+        &args.delete,
     ) {
         (Some(verify_path), _, _, _, _, _, _, _,_) => {
             println!("Authenticating file: {:?}", verify_path);
-            // Add logic for authentication
+            cli_verify_chain(args.clone(), aqua_protocol, verify_path.to_path_buf(), keys_file);
         }
         (_, Some(sign_path), Some(sign_type), _, _, _, _, _,_) => {
             println!("Signing file: {:?} using {:?}", sign_path, sign_type);
-            // Add logic for signing
+           cli_sign_chain(args.clone(), aqua_protocol, sign_path.to_path_buf(), sign_type, keys_file);
+
         }
         (_, _, _, Some(witness_path), Some(witness_type), _, _, _,_) => {
             println!("Witnessing file: {:?} using {:?}", witness_path, witness_type);
-            // Add logic for witnessing
+            
+            cli_winess_chain(args.clone(), aqua_protocol, witness_path.to_path_buf(), witness_type, keys_file);
         }
         (_, _, _, _, _, Some(file_path), _, _,_) => {
             println!("Generating aqua json file from: {:?}", file_path);
-            // cli_generate_aqua_chain(file_path);
+          
+            cli_generate_aqua_chain(args.clone(), aqua_protocol);
         }
-        (_, _, _, _, _, _, Some(file_path), _,_) => {
+        (_, _, _, _, _, _, Some(_file_path), _,_) => {
             println!("Performing scalar operation");
-            // TODO: Add logic for scalar operation
+            cli_generate_scalar_revision(args.clone(), aqua_protocol);
         }
-        (_, _, _, _, _, _, _, Some(link_path),_) => {
-            println!("Linking file: {:?}", link_path);
-            // TODO: Add logic for linking files
+        (_, _, _, _, _, _, _, Some(link_paths),_) => {
+            if link_paths.len() != 2 {
+                eprintln!("Error: Linking requires exactly two file paths.");
+                std::process::exit(1);
+            }
+            let file1 = &link_paths[0];
+            let file2 = &link_paths[1];
+            println!("Linking files: {:?} and {:?}", file1, file2);
         }
         (_, _, _, _, _, _, _, _,Some(file_path)) => {
             println!("delete last revision");
+            cli_remove_revisions_from_aqua_chain(
+                args.clone(),
+                aqua_protocol,
+                file_path.to_path_buf());
         }
         _ => {
             println!("Error: Unsupported operation or missing parameters");

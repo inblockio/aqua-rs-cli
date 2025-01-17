@@ -1,7 +1,7 @@
 [package]
 name = "aqua-cli" #"aqua-verifier-cli"
 authors=["dalmasonto<https://github.com/dalmasonto>","Arthur-Kamau<https://github.com/Arthur-Kamau>" ]
-version = "1.2.1"
+version = "1.3.0"
 edition = "2021"
 license-file = "LICENCE"
 description = "Aqua protocol command line tool that enable you to verify, sign and witness aqua chains."

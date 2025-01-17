@@ -1,26 +1,17 @@
-// use crate::aqua::wallet::{create_ethereum_signature, get_wallet};
-// use crate::models::CliArgs;
-// use crate::servers::server_sign::sign_message_server;
-// use crate::utils::{read_aqua_data, read_secreat_keys, save_logs_to_file, save_page_data};
-// use aqua_verifier_rs_types::models::content::RevisionContentSignature;
-// use aqua_verifier_rs_types::models::page_data::PageData;
-// use std::env;
-// use std::path::PathBuf;
-// use aqua_verifier::aqua_verifier::AquaVerifier;
+use std::path::PathBuf;
 
-// /// Represents the result of extracting chain data
-// struct ChainExtractionResult {
-//     last_revision_hash: String,
-//     genesis_revision_filename: String,
-// }
+use aqua_verifier::aqua::AquaProtocol;
 
-// /// Represents the result of signing operations
-// struct SigningResult {
-//     signature: String,
-//     public_key: String,
-//     wallet_address: String,
-// }
+use crate::models::{CliArgs, SignType, WitnessType};
 
+
+
+pub(crate) fn cli_sign_chain(args: CliArgs, aqua_protocol: AquaProtocol, sign_path: PathBuf, sign_type: &SignType,  keys_file: Option<PathBuf> ) {
+
+
+
+
+}
 // /// Main function to handle the CLI signing chain process
 // ///
 // /// # Arguments

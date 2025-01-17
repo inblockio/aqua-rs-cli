@@ -187,11 +187,7 @@
 
 //     // Check if API_DOMAIN is set
 //     // let aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
-//     // let aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
-//     let verification_platform: String =
-//         env::var("verification_platform").unwrap_or("none".to_string());
-//     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
-//     let api_key = env::var("api_key").unwrap_or("".to_string());
+    
 //     let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
 
 //     println!(
@@ -199,14 +195,7 @@
 //         verification_platform, api_key
 //     );
 
-//     let option = AquaProtocolOptions {
-//         version: 1.3,
-//         strict: false,
-//         allow_null: false,
-//         verification_platform: verification_platform,
-//         verification_platform_key: api_key,
-//         chain_network: chain,
-//     };
+    
 
 //     let aqua_protocol = AquaProtocol::new(option);
 
@@ -223,22 +212,7 @@
 //         }
 //     }
 
-//     let mut keys_file: Option<PathBuf> = None;
-//     // attempt to read aregiument keys , if none attempt to rread from environment variables
-//     if args.clone().keys_file.is_none() {
-//         if !keys_file_env.is_empty() {
-//             let res = is_valid_json_file(&keys_file_env);
-//             if res.is_ok() {
-//                 println!("Reading keys file from env");
-//                 keys_file = Some(PathBuf::from(keys_file_env))
-//             } else {
-//                 panic!("Error with key file provided in the env {:#?}", res.err())
-//             }
-//         }
-//     } else {
-//         println!("Reading keys file from arguments");
-//         keys_file = args.clone().keys_file;
-//     }
+
 //     // Process the arguments based on the combination
 //     match (
 //         args.clone().authenticate,
@@ -257,14 +231,9 @@
 //             cli_winess_chain(args.clone(), aqua_protocol, witness_path)
 //         }
 //         (_, _, _, true, _) => {
-//             cli_generate_aqua_chain(args.clone(), aqua_protocol);
+//            
 //         }
-//         (_, _, _, _, true) => cli_remove_revisions_from_aqua_chain(
-//             args.clone(),
-//             aqua_protocol,
-//             args.clone()
-//                 .remove
-//                 .expect("aqua chain file to delete revision"),
+        // (_, _, _, _, true) => 
 //         ),
 //         _ => unreachable!(
 //             "Unable to determin course of action **Clap ensures at least one operation is selected"

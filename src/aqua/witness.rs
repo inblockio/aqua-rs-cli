@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use aqua_verifier::aqua::AquaProtocol;
 
-use crate::models::CliArgs;
+use crate::models::{CliArgs, WitnessType};
 
 // use crate::models::{CliArgs, WitnessPayload};
 // use crate::servers::server_witness::witness_message_server;
@@ -48,7 +48,11 @@ use crate::models::CliArgs;
 ///
 /// - Supports verbose and non-verbose logging
 /// - Can save logs to a file if an output path is specified
-pub(crate) fn cli_winess_chain(args: CliArgs, aqua_protocol: AquaProtocol, witness_path: PathBuf) {}
+pub(crate) fn cli_winess_chain(args: CliArgs, aqua_protocol: AquaProtocol, witness_path: PathBuf, witness_type:& WitnessType,  keys_file: Option<PathBuf>) {
+
+   
+
+}
 //     let mut logs_data: Vec<String> = Vec::new();
 
 //     println!("Witnessing file: {:?}", witness_path);

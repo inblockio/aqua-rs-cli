@@ -1,14 +1,15 @@
 use std::fs;
 
 use crate::models::CliArgs;
-use crate::utils::{oprataion_logs_and_dumps, save_logs_to_file, save_page_data,  log_with_emoji,  read_aqua_data};
+use crate::utils::{
+    log_with_emoji, oprataion_logs_and_dumps, read_aqua_data, save_logs_to_file, save_page_data,
+};
 use aqua_verifier::aqua::AquaProtocol;
 
 use std::path::PathBuf;
 
 use aqua_verifier::model::aqua_chain_result::AquaChainResult;
 use aqua_verifier_rs_types::models::chain::AquaChain;
-
 
 /// Removes a specified number of revisions from an Aqua chain file.
 ///
@@ -92,7 +93,6 @@ pub fn cli_remove_revisions_from_aqua_chain(
     oprataion_logs_and_dumps(args, logs_data);
 }
 
-
 /// Generates an Aqua chain from a given file using the provided CLI arguments and Aqua verifier.
 ///
 /// This function reads a file, processes it through the Aqua verification process,
@@ -159,6 +159,123 @@ pub fn cli_generate_aqua_chain(args: CliArgs, aqua_protocol: AquaProtocol) {
             eprintln!("Error: Invalid file path provided with -f/--file");
 
             logs_data.push("❌ Invalid file path provided with -f/--file ".to_string());
+        }
+    } else {
+        tracing::error!("Failed to generate Aqua file, check file path ");
+        logs_data.push("❌ Invalid file ,check file path ".to_string());
+    }
+
+    oprataion_logs_and_dumps(args, logs_data);
+}
+
+pub fn cli_generate_scalar_revision(args: CliArgs, aqua_protocol: AquaProtocol) {
+    let mut logs_data: Vec<String> = Vec::new();
+
+    if let Some(file_path) = args.clone().file {
+        // Read the file content into a Vec<u8>
+        match fs::read(&file_path) {
+            Ok(body_bytes) => {
+                // Convert the file name to a String
+                // let file_name = file_name.to_string();
+
+                // convert the file bytes to a string
+                let file_data = String::from_utf8_lossy(&body_bytes).to_string();
+                // parse the string to aquachain capture any errors
+                // let aqua_chain = ::from_json(&file_string);
+                let res = serde_json::from_str::<AquaChain>(&file_data);
+
+                if res.is_err() {
+                    logs_data.push("❌ Error parsing json data ".to_string());
+                    return;
+                }
+                let res_data = res.unwrap();
+
+                // Attempt to generate genesis the Aqua chain
+                let genesis_revision_result = aqua_protocol.generate_scalar_revision(res_data);
+                if genesis_revision_result.is_successfull {
+                    // Add success message
+                    logs_data.push("✅ Successfully  generated Aqua chain ".to_string());
+
+                    // Save modified page data to a new file
+                    let e = save_page_data(
+                        &genesis_revision_result.clone().aqua_chain.unwrap(),
+                        &file_path,
+                        "aqua.json".to_string(),
+                    );
+
+                    // Log any errors in saving page data
+                    if e.is_err() {
+                        logs_data.push(format!("Error saving page data: {:#?}", e.err()));
+                    }
+                } else {
+                    // Add success message
+                    logs_data.push("Error : Generating Aqua chain ".to_string());
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to read file bytes: {}", e);
+                logs_data.push("❌ failed to read file ".to_string());
+            }
+        }
+    } else {
+        tracing::error!("Failed to generate Aqua file, check file path ");
+        logs_data.push("❌ Invalid file ,check file path ".to_string());
+    }
+
+    oprataion_logs_and_dumps(args, logs_data);
+}
+
+
+
+
+pub fn cli_generate_content_revision(args: CliArgs, aqua_protocol: AquaProtocol) {
+    let mut logs_data: Vec<String> = Vec::new();
+
+    if let Some(file_path) = args.clone().file {
+        // Read the file content into a Vec<u8>
+        match fs::read(&file_path) {
+            Ok(body_bytes) => {
+                // Convert the file name to a String
+                // let file_name = file_name.to_string();
+
+                // convert the file bytes to a string
+                let file_data = String::from_utf8_lossy(&body_bytes).to_string();
+                // parse the string to aquachain capture any errors
+                // let aqua_chain = ::from_json(&file_string);
+                let res = serde_json::from_str::<AquaChain>(&file_data);
+
+                if res.is_err() {
+                    logs_data.push("❌ Error parsing json data ".to_string());
+                    return;
+                }
+                let res_data = res.unwrap();
+
+                // Attempt to generate genesis the Aqua chain
+                let genesis_revision_result = aqua_protocol.generate_scalar_revision(res_data);
+                if genesis_revision_result.is_successfull {
+                    // Add success message
+                    logs_data.push("✅ Successfully  generated Aqua chain ".to_string());
+
+                    // Save modified page data to a new file
+                    let e = save_page_data(
+                        &genesis_revision_result.clone().aqua_chain.unwrap(),
+                        &file_path,
+                        "aqua.json".to_string(),
+                    );
+
+                    // Log any errors in saving page data
+                    if e.is_err() {
+                        logs_data.push(format!("Error saving page data: {:#?}", e.err()));
+                    }
+                } else {
+                    // Add success message
+                    logs_data.push("Error : Generating Aqua chain ".to_string());
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to read file bytes: {}", e);
+                logs_data.push("❌ failed to read file ".to_string());
+            }
         }
     } else {
         tracing::error!("Failed to generate Aqua file, check file path ");

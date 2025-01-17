@@ -14,7 +14,7 @@ pub struct CliArgs {
     pub level: Option<String>,
     pub keys_file: Option<PathBuf>,
     pub scalar :  Option<PathBuf>,
-    pub link: Option<PathBuf>,
+    pub link: Option<Vec<PathBuf>>,
     pub delete: Option<PathBuf>,
     pub info: bool
     
