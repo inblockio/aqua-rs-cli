@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std:: fs;
 use std::path::PathBuf;
 
 use aqua_verifier::aqua::AquaProtocol;
@@ -6,7 +6,7 @@ use aqua_verifier::model::signature::Credentials;
 use aqua_verifier::model::witness::WitnessType;
 use aqua_verifier_rs_types::models::chain::AquaChain;
 
-use crate::models::{CliArgs};
+use crate::models::CliArgs;
 use crate::utils::{oprataion_logs_and_dumps, save_page_data};
 
 // use crate::models::{CliArgs, WitnessPayload};
@@ -70,9 +70,7 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_protocol: AquaProtocol, witne
 
 
 
-    if let Some(file_path) = args.clone().file {
-        // Read the file content into a Vec<u8>
-        match fs::read(&file_path) {
+        match fs::read(&witness_path) {
             Ok(body_bytes) => {
                 // Convert the file name to a String
                 // let file_name = file_name.to_string();
@@ -102,7 +100,7 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_protocol: AquaProtocol, witne
                     // Save modified page data to a new file
                     let e = save_page_data(
                         &genesis_revision_result.clone().aqua_chain.unwrap(),
-                        &file_path,
+                        &witness_path,
                         "aqua.json".to_string(),
                     );
 
@@ -120,10 +118,7 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_protocol: AquaProtocol, witne
                 logs_data.push("❌ failed to read file ".to_string());
             }
         }
-    } else {
-        tracing::error!("Failed to generate Aqua file, check file path ");
-        logs_data.push("❌ Invalid file ,check file path ".to_string());
-    }
+    
 
     oprataion_logs_and_dumps(args, logs_data);
 

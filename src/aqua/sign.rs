@@ -7,7 +7,7 @@ use crate::{models::CliArgs, utils::{oprataion_logs_and_dumps, save_page_data}};
 
 
 
-pub(crate) fn cli_sign_chain(args: CliArgs, aqua_protocol: AquaProtocol, sign_path: PathBuf, sign_type: SignatureType,  keys_file: Option<PathBuf> ) {
+pub(crate) fn cli_sign_chain(args: CliArgs, aqua_protocol: AquaProtocol, sign_path: PathBuf ,sign_type: SignatureType,  keys_file: Option<PathBuf> ) {
 
     let mut logs_data: Vec<String> = Vec::new();
     let mut credentials : Option<Credentials> = None;
@@ -24,9 +24,8 @@ pub(crate) fn cli_sign_chain(args: CliArgs, aqua_protocol: AquaProtocol, sign_pa
     }
 
 
-    if let Some(file_path) = args.clone().file {
         // Read the file content into a Vec<u8>
-        match fs::read(&file_path) {
+        match fs::read(&sign_path) {
             Ok(body_bytes) => {
                 // Convert the file name to a String
                 // let file_name = file_name.to_string();
@@ -56,7 +55,7 @@ pub(crate) fn cli_sign_chain(args: CliArgs, aqua_protocol: AquaProtocol, sign_pa
                     // Save modified page data to a new file
                     let e = save_page_data(
                         &genesis_revision_result.clone().aqua_chain.unwrap(),
-                        &file_path,
+                        &sign_path,
                         "aqua.json".to_string(),
                     );
 
@@ -74,10 +73,7 @@ pub(crate) fn cli_sign_chain(args: CliArgs, aqua_protocol: AquaProtocol, sign_pa
                 logs_data.push("❌ failed to read file ".to_string());
             }
         }
-    } else {
-        tracing::error!("Failed to generate Aqua file, check file path ");
-        logs_data.push("❌ Invalid file ,check file path ".to_string());
-    }
+    
 
     oprataion_logs_and_dumps(args, logs_data);
 

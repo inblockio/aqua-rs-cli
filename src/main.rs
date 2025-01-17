@@ -343,7 +343,7 @@ fn main() {
     ) {
         (Some(verify_path), _, _, _, _, _, _, _,_) => {
             println!("Authenticating file: {:?}", verify_path);
-            cli_verify_chain(args.clone(), aqua_protocol, verify_path.to_path_buf(), keys_file);
+            cli_verify_chain(args.clone(), aqua_protocol, verify_path.to_path_buf());
         }
         (_, Some(sign_path), Some(sign_type), _, _, _, _, _,_) => {
             println!("Signing file: {:?} using {:?}", sign_path, sign_type);

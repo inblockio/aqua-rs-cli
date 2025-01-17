@@ -1,11 +1,11 @@
-use aqua_verifier::model::{aqua_chain_result::AquaChainResult, signature::Credentials};
+use aqua_verifier::model::signature::Credentials;
 use aqua_verifier_rs_types::models::{
     chain::AquaChain,
     protocol_logs::{ProtocolLogs, ProtocolLogsType},
 };
 use std::io::Write;
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self,  OpenOptions},
     path::{Path, PathBuf},
 };
 

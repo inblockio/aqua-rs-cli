@@ -1,5 +1,4 @@
 use aqua_verifier::model::{signature::SignatureType, witness::WitnessType};
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]

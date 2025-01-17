@@ -7,10 +7,12 @@ use crate::{models::CliArgs, utils::{oprataion_logs_and_dumps, save_page_data}};
 
 
 
-pub fn cli_verify_chain(args: CliArgs, aqua_protocol: AquaProtocol, verify_path: PathBuf, keys_file: Option<PathBuf>) {
+pub fn cli_verify_chain(args: CliArgs, aqua_protocol: AquaProtocol, verify_path: PathBuf) {
 
     let mut logs_data: Vec<String> = Vec::new();
 
+   
+    
     if let Some(file_path) = args.clone().file {
         // Read the file content into a Vec<u8>
         match fs::read(&file_path) {

@@ -1,9 +1,7 @@
 use std::{fs, path::PathBuf};
 
-use aqua_verifier::{
-    aqua::AquaProtocol,
-    model::signature::{Credentials, SignatureType},
-};
+use aqua_verifier::    aqua::AquaProtocol;
+
 use aqua_verifier_rs_types::models::chain::AquaChain;
 
 use crate::{
