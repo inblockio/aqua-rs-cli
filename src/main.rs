@@ -4,6 +4,7 @@ pub mod tests;
 pub mod utils;
 
 use crate::models::CliArgs;
+use aqua::link::cli_link_chain;
 use aqua::revisions::cli_generate_scalar_revision;
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
@@ -371,6 +372,7 @@ fn main() {
             let file1 = &link_paths[0];
             let file2 = &link_paths[1];
             println!("Linking files: {:?} and {:?}", file1, file2);
+            cli_link_chain(args.clone(), aqua_protocol, file1.clone(), file2.clone());
         }
         (_, _, _, _, _, _, _, _,Some(file_path)) => {
             println!("delete last revision");

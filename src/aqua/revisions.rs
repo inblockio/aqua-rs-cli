@@ -171,7 +171,7 @@ pub fn cli_generate_aqua_chain(args: CliArgs, aqua_protocol: AquaProtocol) {
 pub fn cli_generate_scalar_revision(args: CliArgs, aqua_protocol: AquaProtocol) {
     let mut logs_data: Vec<String> = Vec::new();
 
-    if let Some(file_path) = args.clone().file {
+    if let Some(file_path) = args.clone().scalar {
         // Read the file content into a Vec<u8>
         match fs::read(&file_path) {
             Ok(body_bytes) => {
