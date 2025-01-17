@@ -1,9 +1,11 @@
-use std::env;
+use std::{env, fs};
 use std::path::PathBuf;
 
 use aqua_verifier::aqua::AquaProtocol;
+use aqua_verifier_rs_types::models::chain::AquaChain;
 
 use crate::models::{CliArgs, WitnessType};
+use crate::utils::save_page_data;
 
 // use crate::models::{CliArgs, WitnessPayload};
 // use crate::servers::server_witness::witness_message_server;
@@ -50,7 +52,64 @@ use crate::models::{CliArgs, WitnessType};
 /// - Can save logs to a file if an output path is specified
 pub(crate) fn cli_winess_chain(args: CliArgs, aqua_protocol: AquaProtocol, witness_path: PathBuf, witness_type:& WitnessType,  keys_file: Option<PathBuf>) {
 
-   
+    let mut logs_data: Vec<String> = Vec::new();
+
+    if let Some(file_path) = args.clone().file {
+        // Read the file content into a Vec<u8>
+        match fs::read(&file_path) {
+            Ok(body_bytes) => {
+                // Convert the file name to a String
+                // let file_name = file_name.to_string();
+
+                // convert the file bytes to a string
+                let file_data = String::from_utf8_lossy(&body_bytes).to_string();
+                // parse the string to aquachain capture any errors
+                // let aqua_chain = ::from_json(&file_string);
+                let res = serde_json::from_str::<AquaChain>(&file_data);
+
+                if res.is_err() {
+                    logs_data.push("❌ Error parsing json data (check you aqua chain) ".to_string());
+                    return;
+                }
+                let res_data = res.unwrap();
+
+                // Attempt to generate genesis the Aqua chain
+                let genesis_revision_result = aqua_protocol.verify_aqua_chain(
+                    res_data,
+                    verify_path.parent().unwrap().to_path_buf().to_string_lossy().to_string(),
+                );
+                if genesis_revision_result.is_successfull {
+                    // Add success message
+                    logs_data.push("✅ Successfully  generated Aqua chain ".to_string());
+
+                    // Save modified page data to a new file
+                    let e = save_page_data(
+                        &genesis_revision_result.clone().aqua_chain.unwrap(),
+                        &file_path,
+                        "aqua.json".to_string(),
+                    );
+
+                    // Log any errors in saving page data
+                    if e.is_err() {
+                        logs_data.push(format!("Error saving page data: {:#?}", e.err()));
+                    }
+                } else {
+                    // Add success message
+                    logs_data.push("Error : Generating Aqua chain ".to_string());
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to read file bytes: {}", e);
+                logs_data.push("❌ failed to read file ".to_string());
+            }
+        }
+    } else {
+        tracing::error!("Failed to generate Aqua file, check file path ");
+        logs_data.push("❌ Invalid file ,check file path ".to_string());
+    }
+
+    oprataion_logs_and_dumps(args, logs_data);
+
 
 }
 //     let mut logs_data: Vec<String> = Vec::new();
