@@ -419,7 +419,7 @@ dependencies = [
 [[package]]
 name = "aqua-verifier"
 version = "1.2.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?rev=2a5c440e251ac1fa4510ac2c432f14b4331bf734#2a5c440e251ac1fa4510ac2c432f14b4331bf734"
+source = "git+https://github.com/inblockio/aqua-verifier-rs?rev=802730f7f3b44d9a00885d37e68441b6d4c0a78a#802730f7f3b44d9a00885d37e68441b6d4c0a78a"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -431,6 +431,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bip32",
+ "blocking",
  "chrono",
  "der-parser",
  "did-key",
@@ -454,6 +455,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "reqwest 0.11.27",
+ "ring 0.17.8",
  "rs_merkle",
  "scraper",
  "secp256k1",

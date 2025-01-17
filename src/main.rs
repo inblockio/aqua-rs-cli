@@ -3,7 +3,7 @@ pub mod models;
 pub mod tests;
 pub mod utils;
 
-use crate::models::{CliArgs, SignType, WitnessType};
+use crate::models::CliArgs;
 use aqua::revisions::cli_generate_scalar_revision;
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
@@ -14,6 +14,8 @@ use aqua::{
 };
 use aqua_verifier::aqua::AquaProtocol;
 use aqua_verifier::model::aqua_protocol_options::AquaProtocolOptions;
+use aqua_verifier::model::signature::SignatureType;
+use aqua_verifier::model::witness::WitnessType;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use std::{env, path::PathBuf};
 use utils::{is_valid_file, is_valid_json_file, is_valid_output_file};
@@ -214,18 +216,18 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .map(|p| PathBuf::from(p));
     let sign = matches.get_one::<String>("sign").map(|p| PathBuf::from(p));
     let sign_type = matches.get_one::<String>("sign-type").cloned().map(|s| match s.as_str() {
-        "cli" => SignType::CLI,
-        "metamask" => SignType::MetaMask,
-        "did" => SignType::DID,
+        "cli" => SignatureType::CLI,
+        "metamask" => SignatureType::METAMASK,
+        "did" => SignatureType::DID,
         _ => unreachable!(),
     });
     let witness = matches
         .get_one::<String>("witness")
         .map(|p| PathBuf::from(p));
     let witness_type = if matches.get_flag("witness-eth") {
-        Some(WitnessType::Ethereum)
+        Some(WitnessType::METAMASK)
     } else if matches.get_flag("witness-nostr") {
-        Some(WitnessType::Nostr)
+        Some(WitnessType::NOSTR)
     } else if matches.get_flag("witness-tsa") {
         Some(WitnessType::TSA)
     } else {
@@ -344,13 +346,13 @@ fn main() {
         }
         (_, Some(sign_path), Some(sign_type), _, _, _, _, _,_) => {
             println!("Signing file: {:?} using {:?}", sign_path, sign_type);
-           cli_sign_chain(args.clone(), aqua_protocol, sign_path.to_path_buf(), sign_type, keys_file);
+           cli_sign_chain(args.clone(), aqua_protocol, sign_path.to_path_buf(), sign_type.clone(), keys_file);
 
         }
         (_, _, _, Some(witness_path), Some(witness_type), _, _, _,_) => {
             println!("Witnessing file: {:?} using {:?}", witness_path, witness_type);
             
-            cli_winess_chain(args.clone(), aqua_protocol, witness_path.to_path_buf(), witness_type, keys_file);
+            cli_winess_chain(args.clone(), aqua_protocol, witness_path.to_path_buf(), witness_type.clone(), keys_file);
         }
         (_, _, _, _, _, Some(file_path), _, _,_) => {
             println!("Generating aqua json file from: {:?}", file_path);
