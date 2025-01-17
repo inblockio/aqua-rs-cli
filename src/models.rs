@@ -16,7 +16,8 @@ pub struct CliArgs {
     pub scalar :  Option<PathBuf>,
     pub link: Option<Vec<PathBuf>>,
     pub delete: Option<PathBuf>,
-    pub info: bool
+    pub info: bool,
+    pub content_revision: Option<PathBuf>
     
 }
 

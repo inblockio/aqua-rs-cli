@@ -5,7 +5,7 @@ pub mod utils;
 
 use crate::models::CliArgs;
 use aqua::link::cli_link_chain;
-use aqua::revisions::cli_generate_scalar_revision;
+use aqua::revisions::{cli_generate_content_revision, cli_generate_scalar_revision};
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
@@ -141,6 +141,17 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .help("Delete/remove revision from an aqua json file, removes last revision"),
         )
         .arg(
+            Arg::new("content")
+                .long("content")
+                .action(ArgAction::Set)
+                .value_parser(clap::builder::ValueParser::new(is_valid_output_file))
+                .help("Create a content revision")
+                .long_help(
+                    "Wil create a revision containing the content of the file specified in the chain.",
+                ),
+        )
+        
+        .arg(
             Arg::new("file")
                 .short('f')
                 .long("file")
@@ -207,7 +218,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "scalar", "link", "info"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "scalar", "link",  "content", "info"])
                 .required(true),
         )
         .get_matches();
@@ -234,6 +245,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
     } else {
         None
     };
+    let content_revision = matches.get_one::<String>("content").map(|p| PathBuf::from(p));
     let file = matches.get_one::<String>("file").map(|p| PathBuf::from(p));
     let verbose = matches.get_flag("verbose");
     let output = matches
@@ -266,7 +278,8 @@ pub fn parse_args() -> Result<CliArgs, String> {
         scalar,
         link,
         delete,
-        info
+        info,
+        content_revision
     })
 }
 
@@ -290,6 +303,7 @@ fn main() {
         && args.scalar.is_none()
         && args.link.is_none()
         && args.delete.is_none()
+        && args.content_revision.is_none()
     {
         println!("{}", BASE_LONG_ABOUT);
         return;
@@ -340,31 +354,29 @@ fn main() {
         &args.scalar,
         &args.link,
         &args.delete,
+        &args.content_revision,
     ) {
-        (Some(verify_path), _, _, _, _, _, _, _,_) => {
+        (Some(verify_path), _, _, _, _, _, _, _, _, _) => {
             println!("Authenticating file: {:?}", verify_path);
             cli_verify_chain(args.clone(), aqua_protocol, verify_path.to_path_buf());
         }
-        (_, Some(sign_path), Some(sign_type), _, _, _, _, _,_) => {
+        (_, Some(sign_path), Some(sign_type), _, _, _, _, _, _, _) => {
             println!("Signing file: {:?} using {:?}", sign_path, sign_type);
-           cli_sign_chain(args.clone(), aqua_protocol, sign_path.to_path_buf(), sign_type.clone(), keys_file);
-
+            cli_sign_chain(args.clone(), aqua_protocol, sign_path.to_path_buf(), sign_type.clone(), keys_file);
         }
-        (_, _, _, Some(witness_path), Some(witness_type), _, _, _,_) => {
+        (_, _, _, Some(witness_path), Some(witness_type), _, _, _, _, _) => {
             println!("Witnessing file: {:?} using {:?}", witness_path, witness_type);
-            
             cli_winess_chain(args.clone(), aqua_protocol, witness_path.to_path_buf(), witness_type.clone(), keys_file);
         }
-        (_, _, _, _, _, Some(file_path), _, _,_) => {
+        (_, _, _, _, _, Some(file_path), _, _, _, _) => {
             println!("Generating aqua json file from: {:?}", file_path);
-          
             cli_generate_aqua_chain(args.clone(), aqua_protocol);
         }
-        (_, _, _, _, _, _, Some(_file_path), _,_) => {
+        (_, _, _, _, _, _, Some(_file_path), _, _, _) => {
             println!("Performing scalar operation");
             cli_generate_scalar_revision(args.clone(), aqua_protocol);
         }
-        (_, _, _, _, _, _, _, Some(link_paths),_) => {
+        (_, _, _, _, _, _, _, Some(link_paths), _, _) => {
             if link_paths.len() != 2 {
                 eprintln!("Error: Linking requires exactly two file paths.");
                 std::process::exit(1);
@@ -374,15 +386,20 @@ fn main() {
             println!("Linking files: {:?} and {:?}", file1, file2);
             cli_link_chain(args.clone(), aqua_protocol, file1.clone(), file2.clone());
         }
-        (_, _, _, _, _, _, _, _,Some(file_path)) => {
-            println!("delete last revision");
+        (_, _, _, _, _, _, _, _, Some(file_path), _) => {
+            println!("Deleting last revision");
             cli_remove_revisions_from_aqua_chain(
                 args.clone(),
                 aqua_protocol,
-                file_path.to_path_buf());
+                file_path.to_path_buf(),
+            );
+        }
+        (_, _, _, _, _, _, _, _, _, Some(file_path)) => {
+            println!("Processing content directly: ");
+            cli_generate_content_revision(args.clone(), aqua_protocol, file_path.to_path_buf());
         }
         _ => {
             println!("Error: Unsupported operation or missing parameters");
         }
-    }   
+    }
 }

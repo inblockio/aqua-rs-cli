@@ -225,15 +225,11 @@ pub fn cli_generate_scalar_revision(args: CliArgs, aqua_protocol: AquaProtocol) 
     oprataion_logs_and_dumps(args, logs_data);
 }
 
-
-
-
-pub fn cli_generate_content_revision(args: CliArgs, aqua_protocol: AquaProtocol) {
+pub fn cli_generate_content_revision(args: CliArgs, aqua_protocol: AquaProtocol , content_revision_file: PathBuf) {
     let mut logs_data: Vec<String> = Vec::new();
 
-    if let Some(file_path) = args.clone().file {
         // Read the file content into a Vec<u8>
-        match fs::read(&file_path) {
+        match fs::read(&content_revision_file) {
             Ok(body_bytes) => {
                 // Convert the file name to a String
                 // let file_name = file_name.to_string();
@@ -251,7 +247,11 @@ pub fn cli_generate_content_revision(args: CliArgs, aqua_protocol: AquaProtocol)
                 let res_data = res.unwrap();
 
                 // Attempt to generate genesis the Aqua chain
-                let genesis_revision_result = aqua_protocol.generate_scalar_revision(res_data);
+                let genesis_revision_result = aqua_protocol.generate_content_revision(
+                    content_revision_file.to_str().unwrap().to_string(),
+                    res_data,
+                );
+                // let genesis_revision_result = aqua_protocol.generate_scalar_revision(res_data);
                 if genesis_revision_result.is_successfull {
                     // Add success message
                     logs_data.push("✅ Successfully  generated Aqua chain ".to_string());
@@ -259,7 +259,7 @@ pub fn cli_generate_content_revision(args: CliArgs, aqua_protocol: AquaProtocol)
                     // Save modified page data to a new file
                     let e = save_page_data(
                         &genesis_revision_result.clone().aqua_chain.unwrap(),
-                        &file_path,
+                        &content_revision_file,
                         "aqua.json".to_string(),
                     );
 
@@ -268,19 +268,23 @@ pub fn cli_generate_content_revision(args: CliArgs, aqua_protocol: AquaProtocol)
                         logs_data.push(format!("Error saving page data: {:#?}", e.err()));
                     }
                 } else {
+                    // for item in logs_data.clone() {
+                    //     println!("{}", item);
+                    // }
                     // Add success message
+
                     logs_data.push("Error : Generating Aqua chain ".to_string());
                 }
+
+                println!("Data {:#?}", genesis_revision_result);
+                
             }
             Err(e) => {
                 eprintln!("Failed to read file bytes: {}", e);
                 logs_data.push("❌ failed to read file ".to_string());
             }
         }
-    } else {
-        tracing::error!("Failed to generate Aqua file, check file path ");
-        logs_data.push("❌ Invalid file ,check file path ".to_string());
-    }
+    
 
     oprataion_logs_and_dumps(args, logs_data);
 }

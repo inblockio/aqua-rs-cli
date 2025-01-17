@@ -69,19 +69,22 @@ pub fn read_secreat_keys(path: &PathBuf) -> Result<Credentials, String> {
     }
 }
 
-// Assuming `PageData` has serde::Serialize trait implemented
 pub fn save_page_data(
     aqua_page_data: &AquaChain,
     original_path: &Path,
     extension: String,
 ) -> Result<(), String> {
-    // Change the file extension to "_signed.json"
-    let output_path = original_path.with_extension(extension);
+    // Determine the output path based on the file extension
+    let output_path: PathBuf = if original_path.extension().map_or(false, |ext| ext == "json") {
+        original_path.to_path_buf() // If it's a JSON file, overwrite it
+    } else {
+        original_path.with_extension(extension) // Otherwise, create a new file with the specified extension
+    };
 
     // Serialize PageData to JSON
     match serde_json::to_string_pretty(aqua_page_data) {
         Ok(json_data) => {
-            // Write JSON data to the new file
+            // Write JSON data to the determined file path
             fs::write(&output_path, json_data).map_err(|e| e.to_string())?;
             println!("Aqua chain data saved to: {:?}", output_path);
             Ok(())
