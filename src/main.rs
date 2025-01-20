@@ -399,7 +399,7 @@ fn main() {
             cli_generate_content_revision(args.clone(), aqua_protocol, file_path.to_path_buf());
         }
         _ => {
-            println!("Error: Unsupported operation or missing parameters");
+            println!("Error: Unsupported operation or missing parameters (if witness or signing ensure to pass in witness_type or sign_type) ");
         }
     }
 }
