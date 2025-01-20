@@ -419,7 +419,7 @@ dependencies = [
 [[package]]
 name = "aqua-verifier"
 version = "1.2.0"
-source = "git+https://github.com/inblockio/aqua-verifier-rs?rev=802730f7f3b44d9a00885d37e68441b6d4c0a78a#802730f7f3b44d9a00885d37e68441b6d4c0a78a"
+source = "git+https://github.com/inblockio/aqua-verifier-rs?rev=20b2c8d213fb39fda286a7a205357bdcb3c77358#20b2c8d213fb39fda286a7a205357bdcb3c77358"
 dependencies = [
  "actix-cors",
  "actix-files",
