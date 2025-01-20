@@ -315,7 +315,8 @@ fn main() {
         env::var("verification_platform").unwrap_or("none".to_string());
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
     let api_key = env::var("api_key").unwrap_or("".to_string());
-    let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
+    let keys_file_env = env::var("pwd
+    ").unwrap_or("".to_string());
 
     let option = AquaProtocolOptions {
         version: 1.3,

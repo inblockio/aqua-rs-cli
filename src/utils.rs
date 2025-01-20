@@ -152,13 +152,13 @@ pub fn log_with_emoji(logs: Vec<ProtocolLogs>) -> Vec<String> {
 
 pub fn oprataion_logs_and_dumps(args: CliArgs, logs_data: Vec<String>) {
     // Print logs based on verbosity setting
-    if args.verbose {
+    // if args.verbose {
         for item in logs_data.clone() {
             println!("{}", item);
         }
-    } else {
-        println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
-    }
+    // } else {
+    //     println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
+    // }
 
     // Save logs to file if output path is specified
     if args.output.is_some() {

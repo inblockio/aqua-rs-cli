@@ -12,10 +12,8 @@ pub fn cli_verify_chain(args: CliArgs, aqua_protocol: AquaProtocol, verify_path:
     let mut logs_data: Vec<String> = Vec::new();
 
    
-    
-    if let Some(file_path) = args.clone().file {
-        // Read the file content into a Vec<u8>
-        match fs::read(&file_path) {
+        // Read the file bytes
+        match fs::read(&verify_path) {
             Ok(body_bytes) => {
                 // Convert the file name to a String
                 // let file_name = file_name.to_string();
@@ -44,7 +42,7 @@ pub fn cli_verify_chain(args: CliArgs, aqua_protocol: AquaProtocol, verify_path:
                     // Save modified page data to a new file
                     let e = save_page_data(
                         &genesis_revision_result.clone().aqua_chain.unwrap(),
-                        &file_path,
+                        &verify_path,
                         "aqua.json".to_string(),
                     );
 
@@ -62,10 +60,7 @@ pub fn cli_verify_chain(args: CliArgs, aqua_protocol: AquaProtocol, verify_path:
                 logs_data.push("❌ failed to read file ".to_string());
             }
         }
-    } else {
-        tracing::error!("Failed to generate Aqua file, check file path ");
-        logs_data.push("❌ Invalid file ,check file path ".to_string());
-    }
+    
 
     oprataion_logs_and_dumps(args, logs_data);
 
