@@ -19,3 +19,18 @@ Notes : if a keys file is speciefied in the commands it will take precendence ov
 1. `cargo build ` you can optionally use the `--release` if you want to use te cli tool.
 2. cd `target/debug` or `target/release` run aqua-cli binary .
 3. to get start run `./aqua-cli --help`
+
+
+## Testing using the `test_aqua_cli` script
+
+1. Give the file some permissions
+
+```bash
+chmod +x test_aqua_cli.sh
+```
+
+2. Run the script
+
+```bash
+./test_aqua_cli.sh
+```
