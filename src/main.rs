@@ -1,8 +1,8 @@
 pub mod aqua;
 pub mod models;
 pub mod servers;
-pub mod utils;
 pub mod tests;
+pub mod utils;
 
 use crate::models::CliArgs;
 use aqua::sign::cli_sign_chain;
@@ -12,11 +12,11 @@ use aqua::{
     delete_revision_from_aqua_chain::cli_remove_revisions_from_aqua_chain,
     generate_aqua_chain_from_file::cli_generate_aqua_chain,
 };
+use aqua_verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{env, path::PathBuf};
 use utils::{is_valid_file, is_valid_json_file, is_valid_output_file};
-use aqua_verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
 
 const LONG_ABOUT: &str = r#"🔐 Aqua CLI TOOL
 
@@ -27,7 +27,7 @@ This tool validates files using a aqua protocol. It can:
   • Generate aqua chain.
   • Generate validation reports
 
-COMMANDS: 
+COMMANDS:
    • -a  or --authenticate  to verify an aqua json file.
    • -s or --sign to sign an aqua json file.
    • -w or --witness to witness an aqua json file.
@@ -36,11 +36,11 @@ COMMANDS:
    • -o or --output to save the output to a file (json, html or pdf).
    • -l  or --level  define how strict the validation should be 1 or 2
         1: Strict validation (does look up, if local wallet mnemonic fails it panic)
-        2: Standard validation (create a new mnemonic if one in keys.json faile)
+        2: Standard validation (create a new mnemonic if one in keys.json failed)
    • -h or --help to show usage, about aqua-cli.
    • -i or --info to show the cli version.
-   • -k or --key-file to specify the file containings  (this can also be set in the env  )
-   • -d or --delete remove revision from an aqua json file, bydefault removes last revsion but can be used with -c or --count parameter to specifiy the number of revisions
+   • -k or --key-file to specify the file containing  (this can also be set in the env  )
+   • -d or --delete remove revision from an aqua json file, by default removes last revision but can be used with -c or --count parameter to specify the number of revisions
    • -c or --count to specify the number of revisions to remove (note a genesis revision cannot be removed)
 
 EXAMPLES:
@@ -54,7 +54,7 @@ EXAMPLES:
 
 
 SUMMARY
-   * aquq-cli expects ateast parameter -s,-v,-w or -f.
+   * aqua-cli expects at least parameter -s,-v,-w or -f.
    * in your environment set the
     1. aqua_domain="random_alphanumeric"
     2. aqua_network="sepolia" or  "holesky" or "mainnet"
@@ -69,7 +69,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .long_about(LONG_ABOUT)
-        .about("🔐 Aqua CLI Tool - Validates, Verifies, Signs , Witness aqua chain file and genreates aqua chain files  using aqua protocol")
+        .about("🔐 Aqua CLI Tool - Validates, Verifies, Signs, Witness aqua chain file and generates aqua chain files using aqua protocol")
         .arg(Arg::new("authenticate")
             .short('a')
             .long("authenticate")
@@ -98,7 +98,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .long("delete")
             .action(ArgAction::Set)
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
-            .help("delete/remove revision from an aqua json file, bydefault removes last revsion but can be used with -c or --count parameter to specifiy the number of revisions"))
+            .help("delete/remove revision from an aqua json file, by default removes last revision but can be used with -c or --count parameter to specify the number of revisions"))
         .arg(Arg::new("file")
             .short('f')
             .long("file")
@@ -172,7 +172,6 @@ pub fn parse_args() -> Result<CliArgs, String> {
     }
     let mut remove_count = 1;
     if remove_count_string.is_some() {
-       
         remove_count = remove_count_string.unwrap_or(1);
     }
 
@@ -203,12 +202,16 @@ fn main() {
     // Check if API_DOMAIN is set
     let aqua_domain = env::var("aqua_domain").unwrap_or(random_domain);
     // let aqua_network = env::var("aqua_network").unwrap_or("sepolia".to_string());
-    let verification_platform: String = env::var("verification_platform").unwrap_or("none".to_string());
+    let verification_platform: String =
+        env::var("verification_platform").unwrap_or("none".to_string());
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
     let api_key = env::var("api_key").unwrap_or("".to_string());
     let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
 
-    println!("verification_platform  {} and api key {}  ", verification_platform, api_key);
+    println!(
+        "verification_platform  {} and api key {}  ",
+        verification_platform, api_key
+    );
 
     let option = VerificationOptions {
         version: 1.2,
@@ -235,7 +238,7 @@ fn main() {
     }
 
     let mut keys_file: Option<PathBuf> = None;
-    // attempt to read aregiument keys , if none attempt to rread from environment variables
+    // attempt to read argument keys, if none attempt to read from environment variables
     if args.clone().keys_file.is_none() {
         if !keys_file_env.is_empty() {
             let res = is_valid_json_file(&keys_file_env);
@@ -272,7 +275,7 @@ fn main() {
                 .expect("aqua chain file to delete revision"),
         ),
         _ => unreachable!(
-            "Unable to determin course of action **Clap ensures at least one operation is selected"
+            "Unable to determine course of action **Clap ensures at least one operation is selected"
         ),
     }
 }
