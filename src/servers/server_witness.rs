@@ -5,12 +5,12 @@ use std::sync::{mpsc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
-use crate::models::{ResponseMessage, SignMessage, WitnessPayload, SignOrWitnessNetwork};
+use crate::models::{ResponseMessage, SignMessage, SignOrWitnessNetwork, WitnessPayload};
 use crate::servers::server_witness_html::WITNESS_HTML;
 
 /// Represents the application state for the witness message server.
 ///
-/// This struct holds the current message and network information 
+/// This struct holds the current message and network information
 /// using thread-safe mutexes to allow concurrent access.
 ///
 /// # Fields
@@ -20,7 +20,7 @@ use crate::servers::server_witness_html::WITNESS_HTML;
 struct AppStateServerWitness {
     /// The verification hash to be witnessed, protected by a mutex
     message: Mutex<String>,
-    /// The network chain, protected by a mutex 
+    /// The network chain, protected by a mutex
     network: Mutex<String>,
 }
 
@@ -42,7 +42,7 @@ async fn get_witness_network(
         .network
         .lock()
         .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
-   
+
     // Panic if unable to get the network (alternative error handling)
     if network_res.is_err() {
         panic!("unable to get previous verification hash from server state");
@@ -52,8 +52,8 @@ async fn get_witness_network(
     let network_guard: MutexGuard<'_, String> = network_res.unwrap();
     let network_value = network_guard.clone();
 
-    Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { 
-        network: network_value 
+    Ok(HttpResponse::Ok().json(SignOrWitnessNetwork {
+        network: network_value,
     }))
 }
 
@@ -82,7 +82,7 @@ async fn get_witness_message(
         .message
         .lock()
         .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"));
-    
+
     // Panic if unable to get the message (alternative error handling)
     if msg.is_err() {
         panic!("unable to get previous verification hash from server state");
@@ -165,9 +165,9 @@ pub async fn witness_message_server(
 ) -> Result<WitnessPayload, String> {
     println!(
         "witness_message_server :: hash  {} network {}",
-        previous_verification_hash , network
+        previous_verification_hash, network
     );
-    
+
     // Initialize logging
     env_logger::init();
 

@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use crate::models::{CliArgs, WitnessPayload};
 use crate::servers::server_witness::witness_message_server;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
-use aqua_verifier_rs_types::models::content::RevisionWitnessInput;
-use aqua_verifier_rs_types::models::page_data::PageData;
 use aqua_verifier::aqua_verifier::AquaVerifier;
 use aqua_verifier::util::get_hash_sum;
+use aqua_verifier_rs_types::models::content::RevisionWitnessInput;
+use aqua_verifier_rs_types::models::page_data::PageData;
 
 /// Generates a witness chain for an Aqua file using the provided CLI arguments and Aqua verifier.
 ///
@@ -51,7 +51,7 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
 
     // Read Aqua data from the specified file
     let res: Result<PageData, String> = read_aqua_data(&witness_path);
-    
+
     // Handle file reading errors
     if res.is_err() {
         logs_data.push(res.err().unwrap());
@@ -65,11 +65,11 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
         }
         return;
     }
-    
+
     // Extract Aqua page data
     let aqua_page_data = res.unwrap();
     let aqua_chain_option = aqua_page_data.pages.get(0);
-    
+
     // Validate Aqua chain exists
     if aqua_chain_option.is_none() {
         logs_data.push("no aqua chain found in page data".to_string());
@@ -119,7 +119,7 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
             .expect("Expected a revision as revisions are more than one");
         last_revision_hash = last_rev.metadata.verification_hash.to_string();
     }
-    
+
     // Generate witness event verification hash
     let empty_hash: String = "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26".to_string();
     let witness_event_verification_string = format!("{}{}", empty_hash, last_revision_hash);
@@ -127,15 +127,15 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
 
     // Obtain witness authentication via message server
-    let result: Result<WitnessPayload, String> =
-        runtime.block_on(async { witness_message_server(witness_event_verification_hash, chain).await });
+    let result: Result<WitnessPayload, String> = runtime
+        .block_on(async { witness_message_server(witness_event_verification_hash, chain).await });
 
     if result.is_err() {
         println!("Signing failed: {:#?}", result.err());
         panic!("Aqua cli encountered an error")
     }
     let auth_payload = result.unwrap();
-    
+
     // Print witnessing details
     println!("Witnessing successful!");
     println!("Network: {}", auth_payload.network);
@@ -146,7 +146,8 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
     let params = RevisionWitnessInput {
         filename: genesis_revision
             .content
-            .file.clone()
+            .file
+            .clone()
             .expect("unable to find file")
             .filename,
         tx_hash: auth_payload.tx_hash,
@@ -157,15 +158,20 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
     // Witness the Aqua chain
     let res = aqua_verifier.witness_aqua_chain(aqua_page_data.clone(), params);
 
-    if res.is_err(){
-        res.clone().unwrap_err().iter().for_each(|item| println!("\t\t {}", item));
+    if res.is_err() {
+        res.clone()
+            .unwrap_err()
+            .iter()
+            .for_each(|item| println!("\t\t {}", item));
         panic!("Error .... check logs above");
     }
 
-    let (res_page_data, res_logs ) =  res.clone().unwrap();
+    let (res_page_data, res_logs) = res.clone().unwrap();
 
     // Collect logs
-    res_logs.iter().for_each(|item| logs_data.push(format!("\t {}", item)));
+    res_logs
+        .iter()
+        .for_each(|item| logs_data.push(format!("\t {}", item)));
 
     // Determine success or failure log
     let log_line = if res.is_ok() {

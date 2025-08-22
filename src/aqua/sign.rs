@@ -2,11 +2,11 @@ use crate::aqua::wallet::{create_ethereum_signature, get_wallet};
 use crate::models::CliArgs;
 use crate::servers::server_sign::sign_message_server;
 use crate::utils::{read_aqua_data, read_secreat_keys, save_logs_to_file, save_page_data};
+use aqua_verifier::aqua_verifier::AquaVerifier;
 use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use std::env;
 use std::path::PathBuf;
-use aqua_verifier::aqua_verifier::AquaVerifier;
 
 /// Represents the result of extracting chain data
 struct ChainExtractionResult {

@@ -6,7 +6,7 @@ use aqua_verifier::aqua_verifier::AquaVerifier;
 
 /// Generates an Aqua chain from a given file using the provided CLI arguments and Aqua verifier.
 ///
-/// This function reads a file, processes it through the Aqua verification process, 
+/// This function reads a file, processes it through the Aqua verification process,
 /// and handles logging and output based on the provided CLI arguments.
 ///
 /// # Arguments

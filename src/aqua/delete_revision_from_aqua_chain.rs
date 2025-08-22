@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use aqua_verifier_rs_types::models::page_data::PageData;
 use aqua_verifier::aqua_verifier::AquaVerifier;
+use aqua_verifier_rs_types::models::page_data::PageData;
 
 use crate::models::CliArgs;
 use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
@@ -31,9 +31,9 @@ use crate::utils::{read_aqua_data, save_logs_to_file, save_page_data};
 /// - Handles and logs errors during file reading, revision removal, and log saving
 /// - Does not panic, instead logs and returns from the function on errors
 pub fn cli_remove_revisions_from_aqua_chain(
-    args: CliArgs, 
-    aqua_verifier: AquaVerifier, 
-    aqua_chain_file_path: PathBuf
+    args: CliArgs,
+    aqua_verifier: AquaVerifier,
+    aqua_chain_file_path: PathBuf,
 ) {
     // Number of revisions to remove
     let revision_count_for_deletion = args.remove_count;
@@ -71,9 +71,7 @@ pub fn cli_remove_revisions_from_aqua_chain(
             }
 
             // Add success message
-            logs_data.push(
-                "Success: Removing revision from Aqua chain is successful".to_string(),
-            );
+            logs_data.push("Success: Removing revision from Aqua chain is successful".to_string());
 
             // Save modified page data to a new file
             let e = save_page_data(

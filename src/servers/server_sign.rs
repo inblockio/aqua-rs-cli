@@ -8,7 +8,7 @@ use tokio::sync::broadcast;
 
 /// Represents the application state for the sign message server.
 ///
-/// This struct holds the current message and network information 
+/// This struct holds the current message and network information
 /// using thread-safe mutexes to allow concurrent access.
 ///
 /// # Fields
@@ -18,7 +18,7 @@ use tokio::sync::broadcast;
 struct AppStateServerSign {
     /// The message to be signed, protected by a mutex
     message: Mutex<String>,
-    /// The network chain, protected by a mutex 
+    /// The network chain, protected by a mutex
     network: Mutex<String>,
 }
 
@@ -33,10 +33,10 @@ struct AppStateServerSign {
 /// # Errors
 /// Returns an error if the mutex lock cannot be acquired
 async fn get_sign_network(data: web::Data<AppStateServerSign>) -> Result<HttpResponse, Error> {
-    let msg =  data
-    .network
-    .lock()
-    .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"))?;
+    let msg = data
+        .network
+        .lock()
+        .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to acquire lock"))?;
 
     let network = msg.clone();
     Ok(HttpResponse::Ok().json(SignOrWitnessNetwork { network }))
