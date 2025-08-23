@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 
 use crate::models::{
@@ -35,7 +34,7 @@ pub fn cli_generate_link_revision(
 
 /// Process link revision generation
 fn process_link_revision(
-    args: &CliArgs,
+    _args: &CliArgs,
     source_path: PathBuf,
     target_path: PathBuf,
     logs_data: &mut Vec<String>,
@@ -122,14 +121,14 @@ fn extract_link_data(
 
 /// Create initial AquaTree for a new file when creating link
 fn create_initial_aqua_tree_for_link(
-    source_path: &PathBuf,
+    _source_path: &PathBuf,
     logs_data: &mut Vec<String>,
 ) -> Result<AquaTree, String> {
     // For link operations on new files, we create a minimal initial structure
     // This will be extended by the link revision
     logs_data.push("Creating initial AquaTree for new file".to_string());
 
-    let mut revisions = HashMap::new();
+    let revisions = HashMap::new();
     let file_index = HashMap::new();
     let paths = HashMap::new();
 
@@ -184,7 +183,7 @@ fn add_link_revision_to_tree(
     tree.revisions.insert(revision_hash.clone(), revision_value);
 
     // Update tree mapping
-    let mut path = if previous_hash.is_empty() {
+    let path = if previous_hash.is_empty() {
         vec![revision_hash.clone()]
     } else {
         let mut existing_path = tree
@@ -240,7 +239,7 @@ pub fn link_multiple_targets(args: CliArgs, source_path: PathBuf, target_paths: 
 }
 
 fn process_multiple_links(
-    args: &CliArgs,
+    _args: &CliArgs,
     source_path: PathBuf,
     target_paths: Vec<PathBuf>,
     logs_data: &mut Vec<String>,

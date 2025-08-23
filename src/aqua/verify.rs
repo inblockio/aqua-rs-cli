@@ -206,7 +206,7 @@ fn analyze_timestamps(aqua_tree: &AquaTree, logs_data: &mut Vec<String>) {
         let mut order_issues = 0;
 
         for timestamp in &timestamps {
-            if !prev_timestamp.is_empty() && timestamp < prev_timestamp {
+            if !prev_timestamp.is_empty() && timestamp.as_str() < prev_timestamp {
                 order_issues += 1;
             }
             prev_timestamp = timestamp;
@@ -285,7 +285,7 @@ pub fn verify_revision_by_hash(
     revision_hash: &str,
     logs_data: &mut Vec<String>,
 ) -> Result<(), String> {
-    let revision = aqua_tree
+    let _revision = aqua_tree
         .revisions
         .get(revision_hash)
         .ok_or_else(|| format!("Revision not found: {}", revision_hash))?;
