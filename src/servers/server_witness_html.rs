@@ -145,7 +145,7 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
                     showStatus("Network switched error", err.message);
                     console.log("Network switched error", error);
 
-                    
+
                 }
             } else {
                 console.error("MetaMask is not installed.");
@@ -226,7 +226,7 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
                     contract_address = chain_address;
                 }
 
-                console.log("network " + network + " addrss " + address + " chain contract address " + contract_address);
+                console.log("network " + network + " address " + address + " chain contract address " + contract_address);
 
                 const params = [
                     {
@@ -274,7 +274,7 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
                     });
 
                     if (!response.ok) {
-                        console.log("receieved something othere than 200  from api...");
+                        console.log("received something other than 200 from api...");
                         throw new Error(`Server responded with status: ${response.status}`);
                     }
 
@@ -294,7 +294,7 @@ pub const WITNESS_HTML: &str = r#"<!DOCTYPE html>
 
             } catch (err) {
                 console.error(err);
-                showStatus(' Witenness :: Failed to authenticate: ' + err.message, true);
+                showStatus(' Witness :: Failed to authenticate: ' + err.message, true);
             }
         }
 

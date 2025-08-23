@@ -241,9 +241,9 @@ pub const SIGN_HTML: &str = r#"
 
             } catch (err) {
                 console.error(err);
-                console.log("eRROR " + err.message);
+                console.log("ERROR " + err.message);
                 showStatus("Error =>" + err.message);
-                
+
                 // showStatus('Failed to authenticate: ' + err.message, true);
             }
         }
