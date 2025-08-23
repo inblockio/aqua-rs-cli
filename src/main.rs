@@ -17,13 +17,12 @@ use aqua::{
 };
 use aqua_verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
 use clap::{Arg, ArgAction, ArgGroup, Command};
+use figlet_rs::FIGfont;
 use rand::{distributions::Alphanumeric, Rng};
 use std::{env, path::PathBuf};
 use utils::{is_valid_file, is_valid_json_file, is_valid_output_file};
 
-const LONG_ABOUT: &str = r#"🔐 Aqua CLI v3.2 - Aqua Protocol Version 3
-
-========================================================
+const LONG_ABOUT: &str = r#"
 
 This tool validates and manages Aqua protocol v3 files. It can:
   • Verify Aqua chain JSON files (v3 format)
@@ -102,7 +101,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .long_about(LONG_ABOUT)
-        .about("🔐 Aqua CLI v3.2 - Validates, Signs, Witnesses and Generates Aqua Protocol v3 chains")
+        .about("Aqua CLI v3.2 - Validates, Signs, Witnesses and Generates Aqua Protocol v3 chains")
 
         // Main operation arguments
         .arg(Arg::new("authenticate")
@@ -277,6 +276,16 @@ pub fn parse_args() -> Result<CliArgs, String> {
 }
 
 fn main() {
+    // --- MODIFIED BANNER CODE ---
+    let standard_font = FIGfont::standard().unwrap();
+    if let Some(figure) = standard_font.convert("Aqua CLI") {
+        println!("{}", figure);
+    }
+    println!("=====================================================");
+    println!("         🔐 Aqua Protocol Version 3");
+    println!("=====================================================\n");
+    // --- END: MODIFIED BANNER CODE ---
+
     dotenv::dotenv().ok();
 
     // Generate random domain if not set
@@ -291,10 +300,9 @@ fn main() {
     let verification_platform = env::var("verification_platform").unwrap_or("none".to_string());
     let chain = env::var("chain").unwrap_or("sepolia".to_string());
     let api_key = env::var("api_key").unwrap_or("".to_string());
-    let keys_file_env = env::var("keys_file").unwrap_or("".to_string());
+    let keys_file_env = env::var("keys_file").unwrap_or("".to_string().to_uppercase());
 
-    println!("🔐 Aqua CLI v3.2 - Protocol Version 3");
-    println!("Verification platform: {}", verification_platform);
+    // println!("Verification platform: {}", verification_platform);
     if !api_key.is_empty() {
         println!("API key configured: ✓");
     }
