@@ -8,7 +8,6 @@ use crate::utils::{
     read_secret_keys, save_aqua_tree, save_logs_to_file,
 };
 use aqua_verifier::aqua_verifier::AquaVerifier;
-use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
@@ -63,6 +62,7 @@ fn process_signing_chain(
 }
 
 /// Data extracted from AquaTree for signing
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct SigningData {
     message_to_sign: String,
     latest_hash: String,
@@ -388,7 +388,7 @@ pub fn add_signature_revision_to_aqua_tree(
 /// Validate signature revision integrity
 pub fn validate_signature_revision(
     signature_revision: &SignatureRevision,
-    message_hash: &str,
+    _message_hash: &str,
 ) -> Result<bool, String> {
     // This is a placeholder for actual signature verification
     // In a real implementation, you would:
@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_find_genesis_filename() {
-        let mut revisions = HashMap::new();
+        let mut revisions = std::collections::HashMap::new();
         revisions.insert(
             "0x123".to_string(),
             serde_json::json!({
@@ -443,14 +443,14 @@ mod tests {
             }),
         );
 
-        let mut file_index = HashMap::new();
+        let mut file_index = std::collections::HashMap::new();
         file_index.insert("0x123".to_string(), "genesis.txt".to_string());
 
         let tree = AquaTree {
             revisions,
             file_index,
             tree_mapping: TreeMapping {
-                paths: HashMap::new(),
+                paths: std::collections::HashMap::new(),
                 latest_hash: "0x123".to_string(),
             },
         };

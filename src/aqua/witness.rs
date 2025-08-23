@@ -41,7 +41,7 @@ pub fn cli_witness_chain(args: CliArgs, _aqua_verifier: AquaVerifier, witness_pa
 
 /// Process the witnessing chain operation for v3
 fn process_witnessing_chain(
-    args: &CliArgs,
+    _args: &CliArgs,
     witness_path: PathBuf,
     logs_data: &mut Vec<String>,
 ) -> Result<(), String> {
@@ -64,6 +64,7 @@ fn process_witnessing_chain(
 }
 
 /// Data extracted from AquaTree for witnessing
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct WitnessingData {
     latest_hash: String,
     witness_event_hash: String,
@@ -519,7 +520,7 @@ fn validate_ethereum_witness(
 
 /// Validate NOSTR witness
 fn validate_nostr_witness(
-    witness_revision: &WitnessRevision,
+    _witness_revision: &WitnessRevision,
     logs_data: &mut Vec<String>,
 ) -> Result<bool, String> {
     logs_data.push("Validating NOSTR witness...".to_string());
@@ -536,7 +537,7 @@ fn validate_nostr_witness(
 
 /// Validate TSA witness
 fn validate_tsa_witness(
-    witness_revision: &WitnessRevision,
+    _witness_revision: &WitnessRevision,
     logs_data: &mut Vec<String>,
 ) -> Result<bool, String> {
     logs_data.push("Validating TSA witness...".to_string());
@@ -569,8 +570,6 @@ fn output_results(args: &CliArgs, logs_data: &Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::TreeMapping;
-    use std::collections::HashMap;
 
     #[test]
     fn test_witness_event_hash_generation() {

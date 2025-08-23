@@ -2,16 +2,14 @@ use serde_json::Value;
 use sha3::{Digest, Sha3_256};
 use std::collections::{HashMap, HashSet};
 
-use crate::models::{
-    AquaTree, HashingMethod, RevisionType, ValidationError, SUPPORTED_SIGNATURE_TYPES,
-    SUPPORTED_WITNESS_NETWORKS,
-};
+use crate::models::{AquaTree, RevisionType, ValidationError};
 use crate::utils::{
     validate_revision_type, validate_signature_type, validate_timestamp, validate_version,
     validate_witness_network,
 };
 
 /// Complete v3 compliance validator
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AquaV3Validator {
     strict_mode: bool,
 }
@@ -224,19 +222,19 @@ impl AquaV3Validator {
 
     /// RV-04: Signature Verification
     fn validate_signature_revision(&self, revision: &Value) -> Result<(), ValidationError> {
-        let signature = revision
+        let _signature = revision
             .get("signature")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ValidationError::MissingRequiredField("signature".to_string()))?;
 
-        let public_key = revision
+        let _public_key = revision
             .get("signature_public_key")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
                 ValidationError::MissingRequiredField("signature_public_key".to_string())
             })?;
 
-        let wallet_address = revision
+        let _wallet_address = revision
             .get("signature_wallet_address")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
@@ -305,7 +303,7 @@ impl AquaV3Validator {
         }
 
         // Validate merkle proof if present
-        if let Some(merkle_root) = revision.get("witness_merkle_root").and_then(|v| v.as_str()) {
+        if let Some(_merkle_root) = revision.get("witness_merkle_root").and_then(|v| v.as_str()) {
             if let Some(merkle_proof) = revision
                 .get("witness_merkle_proof")
                 .and_then(|v| v.as_array())
@@ -322,7 +320,7 @@ impl AquaV3Validator {
 
     /// Validate link revision
     fn validate_link_revision(&self, revision: &Value) -> Result<(), ValidationError> {
-        let link_type = revision
+        let _link_type = revision
             .get("link_type")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ValidationError::MissingRequiredField("link_type".to_string()))?;
@@ -403,7 +401,7 @@ impl AquaV3Validator {
         &self,
         revisions: &HashMap<String, Value>,
     ) -> Result<(), ValidationError> {
-        for (hash, revision) in revisions {
+        for (_hash, revision) in revisions {
             if let Some(prev_hash) = revision
                 .get("previous_verification_hash")
                 .and_then(|v| v.as_str())
