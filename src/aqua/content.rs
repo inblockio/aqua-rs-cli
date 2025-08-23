@@ -39,9 +39,9 @@ pub fn cli_generate_content_revision(
 
 /// Process content revision generation
 fn process_content_revision(
-    args: &CliArgs,
+    _args: &CliArgs,
     file_path: PathBuf,
-    domain_id: &str,
+    _domain_id: &str,
     logs_data: &mut Vec<String>,
 ) -> Result<(), String> {
     // Read file content for hash calculation
@@ -199,7 +199,7 @@ pub fn update_file_to_content_revision(args: CliArgs, aqua_tree_path: PathBuf, f
 }
 
 fn process_content_update(
-    args: &CliArgs,
+    _args: &CliArgs,
     aqua_tree_path: PathBuf,
     file_path: PathBuf,
     logs_data: &mut Vec<String>,

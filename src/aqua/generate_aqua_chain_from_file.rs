@@ -1,6 +1,3 @@
-use std::fs;
-use std::path::PathBuf;
-
 use crate::models::{
     create_version_string, AquaTree, BaseRevision, CliArgs, FileRevision, HashingMethod,
     TreeMapping,
@@ -10,7 +7,10 @@ use crate::utils::{
     save_aqua_tree, save_logs_to_file,
 };
 use aqua_verifier::aqua_verifier::AquaVerifier;
+use base64::{engine::general_purpose, Engine as _};
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 
 /// Generate an Aqua chain from a file (v3 format)
 /// Creates a file revision which can optionally include embedded content
@@ -40,9 +40,9 @@ pub fn cli_generate_aqua_chain(
 
 /// Process file chain generation
 fn process_file_generation(
-    args: &CliArgs,
+    _args: &CliArgs,
     file_path: PathBuf,
-    domain_id: &str,
+    _domain_id: &str,
     logs_data: &mut Vec<String>,
 ) -> Result<(), String> {
     // Read file content
@@ -75,7 +75,7 @@ fn process_file_generation(
             version: create_version_string(HashingMethod::Scalar),
         },
         content: if embed_content {
-            Some(base64::encode(&file_content))
+            Some(general_purpose::STANDARD.encode(&file_content))
         } else {
             None
         },
@@ -211,7 +211,7 @@ pub fn add_file_revision_to_aqua_tree(
             version: create_version_string(HashingMethod::Scalar),
         },
         content: if should_embed {
-            Some(base64::encode(&file_content))
+            Some(general_purpose::STANDARD.encode(&file_content))
         } else {
             None
         },
@@ -273,7 +273,7 @@ pub fn update_aqua_chain_with_file(args: CliArgs, aqua_tree_path: PathBuf, new_f
 }
 
 fn process_chain_update(
-    args: &CliArgs,
+    _args: &CliArgs,
     aqua_tree_path: PathBuf,
     new_file_path: PathBuf,
     logs_data: &mut Vec<String>,
@@ -296,7 +296,7 @@ fn process_chain_update(
 /// Create file revision from raw content (for programmatic use)
 pub fn create_file_revision_from_content(
     content: Vec<u8>,
-    filename: String,
+    _filename: String,
     previous_hash: Option<String>,
     embed_content: bool,
 ) -> Result<(String, serde_json::Value), String> {
@@ -313,7 +313,7 @@ pub fn create_file_revision_from_content(
             version: create_version_string(HashingMethod::Scalar),
         },
         content: if embed_content {
-            Some(base64::encode(&content))
+            Some(general_purpose::STANDARD.encode(&content))
         } else {
             None
         },
@@ -336,7 +336,8 @@ pub fn create_file_revision_from_content(
 /// Extract embedded content from file revision
 pub fn extract_embedded_content(revision: &serde_json::Value) -> Result<Option<Vec<u8>>, String> {
     if let Some(content_b64) = revision.get("content").and_then(|v| v.as_str()) {
-        let content = base64::decode(content_b64)
+        let content = general_purpose::STANDARD
+            .decode(content_b64)
             .map_err(|e| format!("Failed to decode embedded content: {}", e))?;
         Ok(Some(content))
     } else {
@@ -440,7 +441,7 @@ mod tests {
     #[test]
     fn test_embedded_content_extraction() {
         let content = b"Test content";
-        let encoded = base64::encode(content);
+        let encoded = general_purpose::STANDARD.encode(content);
 
         let revision = serde_json::json!({
             "content": encoded,

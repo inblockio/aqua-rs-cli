@@ -38,9 +38,9 @@ pub fn cli_generate_form_revision(
 
 /// Process form revision generation
 fn process_form_revision(
-    args: &CliArgs,
+    _args: &CliArgs,
     form_path: PathBuf,
-    domain_id: &str,
+    _domain_id: &str,
     logs_data: &mut Vec<String>,
 ) -> Result<(), String> {
     // Read form data
