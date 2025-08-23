@@ -1,3 +1,4 @@
-// pub mod sign;
+pub mod sign;
 // pub mod verify;
-// pub mod witness;
+pub mod content;
+pub mod witness;
