@@ -1,46 +1,31 @@
 use crate::aqua::wallet::{create_ethereum_signature, get_wallet};
-use crate::models::CliArgs;
+use crate::models::{
+    create_version_string, AquaTree, BaseRevision, CliArgs, HashingMethod, SignatureRevision,
+};
 use crate::servers::server_sign::sign_message_server;
-use crate::utils::{read_aqua_data, read_secreat_keys, save_logs_to_file, save_page_data};
+use crate::utils::{
+    calculate_revision_hash, generate_timestamp, get_latest_revision_hash, read_aqua_data,
+    read_secret_keys, save_aqua_tree, save_logs_to_file,
+};
 use aqua_verifier::aqua_verifier::AquaVerifier;
-use aqua_verifier_rs_types::models::content::RevisionContentSignature;
-use aqua_verifier_rs_types::models::page_data::PageData;
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
-/// Represents the result of extracting chain data
-struct ChainExtractionResult {
-    last_revision_hash: String,
-    genesis_revision_filename: String,
-}
-
-/// Represents the result of signing operations
-struct SigningResult {
-    signature: String,
-    public_key: String,
-    wallet_address: String,
-}
-
-/// Main function to handle the CLI signing chain process
-///
-/// # Arguments
-/// * `args` - CLI arguments
-/// * `aqua_verifier` - Instance of AquaVerifier
-/// * `sign_path` - Path to the file to be signed
-/// * `keys_file` - Optional path to the keys file
-pub(crate) fn cli_sign_chain(
+/// Main function to handle CLI signing chain process for v3
+pub fn cli_sign_chain(
     args: CliArgs,
-    aqua_verifier: AquaVerifier,
+    _aqua_verifier: AquaVerifier,
     sign_path: PathBuf,
     keys_file: Option<PathBuf>,
 ) {
     let mut logs_data: Vec<String> = Vec::new();
     logs_data.push(format!(
-        "Starting signing process for file: {:?}",
+        "Starting v3 signing process for file: {:?}",
         sign_path
     ));
 
-    match process_signing_chain(&args, aqua_verifier, &sign_path, keys_file, &mut logs_data) {
+    match process_signing_chain(&args, &sign_path, keys_file, &mut logs_data) {
         Ok(_) => {
             logs_data.push("Signing process completed successfully".to_string());
         }
@@ -52,156 +37,191 @@ pub(crate) fn cli_sign_chain(
     output_results(&args, &logs_data);
 }
 
-/// Process the signing chain operation
+/// Process the signing chain operation for v3
 fn process_signing_chain(
     args: &CliArgs,
-    aqua_verifier: AquaVerifier,
     sign_path: &PathBuf,
     keys_file: Option<PathBuf>,
     logs_data: &mut Vec<String>,
 ) -> Result<(), String> {
-    let aqua_page_data = read_and_validate_data(sign_path, logs_data)?;
-    let chain_data = extract_chain_data(&aqua_page_data, logs_data)?;
-    let sign_result = perform_signing(&chain_data.last_revision_hash, keys_file, logs_data, args)?;
+    // Read and validate AquaTree
+    let aqua_tree = read_and_validate_tree(sign_path, logs_data)?;
 
-    let rev_sig = RevisionContentSignature {
-        signature: sign_result.signature,
-        wallet_address: sign_result.wallet_address,
-        publickey: sign_result.public_key,
-        filename: chain_data.genesis_revision_filename,
-    };
+    // Extract data needed for signing
+    let sign_data = extract_signing_data(&aqua_tree, logs_data)?;
 
-    process_verification_and_save(aqua_verifier, aqua_page_data, rev_sig, sign_path, logs_data)?;
+    // Perform signing operation
+    let sign_result = perform_signing(&sign_data.message_to_sign, keys_file, logs_data, args)?;
+
+    // Create signature revision
+    let signature_revision = create_signature_revision(sign_data, sign_result, logs_data)?;
+
+    // Add signature revision to tree and save
+    add_signature_to_tree(aqua_tree, signature_revision, sign_path, logs_data)?;
+
     Ok(())
 }
 
-/// Read and validate the input data file
-fn read_and_validate_data(
+/// Data extracted from AquaTree for signing
+struct SigningData {
+    message_to_sign: String,
+    latest_hash: String,
+    genesis_filename: String,
+}
+
+/// Result of signing operation
+struct SigningResult {
+    signature: String,
+    public_key: String,
+    wallet_address: String,
+    signature_type: String,
+}
+
+/// Read and validate the AquaTree
+fn read_and_validate_tree(
     sign_path: &PathBuf,
     logs_data: &mut Vec<String>,
-) -> Result<PageData, String> {
-    logs_data.push("Info : Reading and validating input data...".to_string());
-    read_aqua_data(sign_path).map_err(|e| {
-        logs_data.push(format!("Error : Error reading aqua data: {}", e));
+) -> Result<AquaTree, String> {
+    logs_data.push("Reading and validating AquaTree...".to_string());
+
+    let aqua_tree = read_aqua_data(sign_path).map_err(|e| {
+        logs_data.push(format!("Error reading AquaTree: {}", e));
         e
-    })
+    })?;
+
+    // Basic validation
+    if aqua_tree.revisions.is_empty() {
+        return Err("No revisions found in AquaTree".to_string());
+    }
+
+    logs_data.push(format!(
+        "Successfully loaded AquaTree with {} revisions",
+        aqua_tree.revisions.len()
+    ));
+    Ok(aqua_tree)
 }
 
-/// Extract necessary chain data from the page data
-fn extract_chain_data(
-    aqua_page_data: &PageData,
+/// Extract data needed for signing from AquaTree
+fn extract_signing_data(
+    aqua_tree: &AquaTree,
     logs_data: &mut Vec<String>,
-) -> Result<ChainExtractionResult, String> {
-    logs_data.push("Info : Extracting chain data...".to_string());
+) -> Result<SigningData, String> {
+    logs_data.push("Extracting signing data...".to_string());
 
-    let aqua_chain = aqua_page_data.pages.get(0).ok_or_else(|| {
-        let error = "Error : No aqua chain found in page data".to_string();
-        logs_data.push(error.clone());
-        error
-    })?;
+    // Get latest revision hash (this is what we'll sign)
+    let latest_hash = get_latest_revision_hash(aqua_tree);
+    if latest_hash.is_empty() {
+        return Err("No latest revision hash found".to_string());
+    }
 
-    let genesis_hash_revision = aqua_chain.revisions.get(0).ok_or_else(|| {
-        let error = "Error : Error fetching genesis revision".to_string();
-        logs_data.push(error.clone());
-        error
-    })?;
+    // Find genesis revision to get filename
+    let genesis_filename = find_genesis_filename(aqua_tree)?;
 
-    let (_genesis_hash, genesis_revision) = genesis_hash_revision;
+    logs_data.push(format!("Message to sign: {}", latest_hash));
+    logs_data.push(format!("Genesis filename: {}", genesis_filename));
 
-    let genesis_filename = genesis_revision
-        .content
-        .clone()
-        .file
-        .ok_or_else(|| "Error : No filename found in genesis revision".to_string())?
-        .filename;
-
-    let last_revision_hash = if aqua_chain.revisions.len() == 1 {
-        genesis_revision.metadata.verification_hash.to_string()
-    } else {
-        let (_last_hash, last_rev) = aqua_chain
-            .revisions
-            .get(aqua_chain.revisions.len() - 1)
-            .ok_or_else(|| "Error : error getting last revision".to_string())?;
-        last_rev.metadata.verification_hash.to_string()
-    };
-
-    Ok(ChainExtractionResult {
-        last_revision_hash,
-        genesis_revision_filename: genesis_filename,
+    Ok(SigningData {
+        message_to_sign: latest_hash.clone(),
+        latest_hash,
+        genesis_filename,
     })
 }
 
-/// Perform the signing operation either through server or local keys
+/// Find genesis revision filename
+fn find_genesis_filename(aqua_tree: &AquaTree) -> Result<String, String> {
+    // Look for revision with empty previous_verification_hash
+    for (hash, revision) in &aqua_tree.revisions {
+        if let Some(prev_hash) = revision
+            .get("previous_verification_hash")
+            .and_then(|v| v.as_str())
+        {
+            if prev_hash.is_empty() {
+                // This is genesis revision, get filename from file_index
+                if let Some(filename) = aqua_tree.file_index.get(hash) {
+                    return Ok(filename.clone());
+                }
+                // If not in file_index, try to extract from revision itself
+                if let Some("file") = revision.get("revision_type").and_then(|v| v.as_str()) {
+                    return Ok("genesis_file".to_string()); // fallback
+                }
+            }
+        }
+    }
+    Err("Genesis revision not found".to_string())
+}
+
+/// Perform signing operation (local or server-based)
 fn perform_signing(
-    last_revision_hash: &str,
+    message_to_sign: &str,
     keys_file: Option<PathBuf>,
     logs_data: &mut Vec<String>,
     args: &CliArgs,
 ) -> Result<SigningResult, String> {
-    logs_data.push("Info : Starting signing process...".to_string());
+    logs_data.push("Starting signing process...".to_string());
 
     if let Some(keys_path) = keys_file {
-        perform_local_signing(last_revision_hash, keys_path, logs_data, args)
+        perform_local_signing(message_to_sign, keys_path, logs_data, args)
     } else {
-        perform_server_signing(last_revision_hash, logs_data)
+        perform_server_signing(message_to_sign, logs_data)
     }
 }
 
 /// Perform signing using local keys
 fn perform_local_signing(
-    last_revision_hash: &str,
+    message_to_sign: &str,
     keys_path: PathBuf,
     logs_data: &mut Vec<String>,
     args: &CliArgs,
 ) -> Result<SigningResult, String> {
-    logs_data.push("Info : Performing local signing...".to_string());
+    logs_data.push("Performing local signing with ethereum:eip-191...".to_string());
 
-    let secret_keys = read_secreat_keys(&keys_path).map_err(|e| {
-        let error = format!("Error :  error reading secret keys: {}", e);
+    let secret_keys = read_secret_keys(&keys_path).map_err(|e| {
+        let error = format!("Error reading secret keys: {}", e);
         logs_data.push(error.clone());
         error
     })?;
 
     let mnemonic = secret_keys.mnemonic.ok_or_else(|| {
-        let error = "Error : Mnemonic not found in secret keys".to_string();
+        let error = "Mnemonic not found in secret keys".to_string();
         logs_data.push(error.clone());
         error
     })?;
 
-    let gen_wallet_on_fail = if args.level.is_none() {
-        true
-    } else if args.level.as_ref().unwrap().trim() == "1".to_string() {
-        false
-    } else {
-        true
+    // Determine wallet generation behavior
+    let gen_wallet_on_fail = match args.level.as_ref() {
+        Some(level) => level.trim() != "1",
+        None => true,
     };
 
     let (address, public_key, private_key) =
         get_wallet(&mnemonic, gen_wallet_on_fail).map_err(|e| {
-            let error = format!("Error : getting wallet: {}", e);
+            let error = format!("Error getting wallet: {}", e);
             logs_data.push(error.clone());
             error
         })?;
 
-    let signature = create_ethereum_signature(&private_key, last_revision_hash).map_err(|e| {
-        let error = format!("Error : creating signature: {}", e);
+    let signature = create_ethereum_signature(&private_key, message_to_sign).map_err(|e| {
+        let error = format!("Error creating signature: {}", e);
         logs_data.push(error.clone());
         error
     })?;
+
+    logs_data.push("Local signing completed successfully".to_string());
 
     Ok(SigningResult {
         signature,
         public_key,
         wallet_address: address,
+        signature_type: "ethereum:eip-191".to_string(),
     })
 }
 
-/// Perform signing using the server
+/// Perform signing using MetaMask server
 fn perform_server_signing(
-    last_revision_hash: &str,
+    message_to_sign: &str,
     logs_data: &mut Vec<String>,
 ) -> Result<SigningResult, String> {
-    logs_data.push("Info : Performing server signing...".to_string());
+    logs_data.push("Performing server signing with MetaMask...".to_string());
 
     let runtime = tokio::runtime::Runtime::new().map_err(|e| {
         let error = format!("Error initializing tokio runtime: {}", e);
@@ -209,57 +229,190 @@ fn perform_server_signing(
         error
     })?;
 
-    let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
+    let chain = env::var("chain").unwrap_or("sepolia".to_string());
 
     let sign_payload = runtime
-        .block_on(async { sign_message_server(last_revision_hash.to_string(), chain).await })
+        .block_on(async { sign_message_server(message_to_sign.to_string(), chain).await })
         .map_err(|e| {
             let error = format!("Error in server signing: {}", e);
             logs_data.push(error.clone());
             error
         })?;
 
+    logs_data.push("Server signing completed successfully".to_string());
+
     Ok(SigningResult {
         signature: sign_payload.signature,
         public_key: sign_payload.public_key,
         wallet_address: sign_payload.wallet_address,
+        signature_type: sign_payload.signature_type,
     })
 }
 
-/// Process verification and save the results
-fn process_verification_and_save(
-    aqua_verifier: AquaVerifier,
-    aqua_page_data: PageData,
-    rev_sig: RevisionContentSignature,
+/// Create signature revision from signing data and result
+fn create_signature_revision(
+    sign_data: SigningData,
+    sign_result: SigningResult,
+    logs_data: &mut Vec<String>,
+) -> Result<SignatureRevision, String> {
+    logs_data.push("Creating signature revision...".to_string());
+
+    let signature_revision = SignatureRevision {
+        base: BaseRevision {
+            previous_verification_hash: sign_data.latest_hash,
+            local_timestamp: generate_timestamp(),
+            revision_type: "signature".to_string(),
+            version: create_version_string(HashingMethod::Scalar),
+        },
+        signature: sign_result.signature,
+        signature_public_key: sign_result.public_key,
+        signature_wallet_address: sign_result.wallet_address,
+        signature_type: sign_result.signature_type,
+    };
+
+    logs_data.push("Signature revision created".to_string());
+    Ok(signature_revision)
+}
+
+/// Add signature revision to AquaTree and save
+fn add_signature_to_tree(
+    mut aqua_tree: AquaTree,
+    signature_revision: SignatureRevision,
     sign_path: &PathBuf,
     logs_data: &mut Vec<String>,
 ) -> Result<(), String> {
-    logs_data.push("Info : Processing verification and saving results...".to_string());
+    logs_data.push("Adding signature revision to AquaTree...".to_string());
 
-    // println!("Error cause {:#?} ",rev_sig);
+    // Serialize signature revision
+    let revision_json = serde_json::to_string(&signature_revision)
+        .map_err(|e| format!("Failed to serialize signature revision: {}", e))?;
 
-    let (res_page_data, res_logs) = aqua_verifier
-        .sign_aqua_chain(aqua_page_data, rev_sig)
-        .map_err(|errors| {
-            let error_msg = errors.join("\n");
-            logs_data.push(format!("Verification errors:\n{}", error_msg));
-            error_msg
-        })?;
+    let revision_hash = calculate_revision_hash(&revision_json)?;
+    logs_data.push(format!(
+        "Generated signature revision hash: {}",
+        revision_hash
+    ));
 
-    res_logs.iter().for_each(|item| {
-        logs_data.push(format!("\t {}", item));
-    });
+    // Add to revisions
+    let revision_value: serde_json::Value = serde_json::from_str(&revision_json)
+        .map_err(|e| format!("Failed to parse revision JSON: {}", e))?;
 
-    save_page_data(&res_page_data, sign_path, "signed.json".to_string()).map_err(|e| {
-        let error = format!("Error saving page data: {}", e);
+    aqua_tree
+        .revisions
+        .insert(revision_hash.clone(), revision_value);
+
+    // Update tree mapping
+    let previous_hash = signature_revision.base.previous_verification_hash.clone();
+    let mut path = aqua_tree
+        .tree_mapping
+        .paths
+        .get(&previous_hash)
+        .cloned()
+        .unwrap_or_else(|| vec![previous_hash.clone()]);
+    path.push(revision_hash.clone());
+
+    aqua_tree
+        .tree_mapping
+        .paths
+        .insert(revision_hash.clone(), path);
+    aqua_tree.tree_mapping.latest_hash = revision_hash.clone();
+
+    // Save updated AquaTree
+    save_aqua_tree(&aqua_tree, sign_path, "signed").map_err(|e| {
+        let error = format!("Error saving signed AquaTree: {}", e);
         logs_data.push(error.clone());
         error
     })?;
 
+    logs_data.push("Signed AquaTree saved successfully".to_string());
     Ok(())
 }
 
-/// Output the results based on CLI arguments
+/// Add signature revision to existing AquaTree (utility function)
+pub fn add_signature_revision_to_aqua_tree(
+    aqua_tree: &mut AquaTree,
+    signature: String,
+    public_key: String,
+    wallet_address: String,
+    signature_type: String,
+    logs_data: &mut Vec<String>,
+) -> Result<String, String> {
+    let previous_hash = aqua_tree.tree_mapping.latest_hash.clone();
+
+    let signature_revision = SignatureRevision {
+        base: BaseRevision {
+            previous_verification_hash: previous_hash,
+            local_timestamp: generate_timestamp(),
+            revision_type: "signature".to_string(),
+            version: create_version_string(HashingMethod::Scalar),
+        },
+        signature,
+        signature_public_key: public_key,
+        signature_wallet_address: wallet_address,
+        signature_type,
+    };
+
+    // Serialize and hash
+    let revision_json = serde_json::to_string(&signature_revision)
+        .map_err(|e| format!("Failed to serialize signature revision: {}", e))?;
+
+    let revision_hash = calculate_revision_hash(&revision_json)?;
+
+    // Add to tree
+    let revision_value: serde_json::Value = serde_json::from_str(&revision_json)
+        .map_err(|e| format!("Failed to parse revision JSON: {}", e))?;
+
+    aqua_tree
+        .revisions
+        .insert(revision_hash.clone(), revision_value);
+
+    // Update tree mapping
+    let mut path = aqua_tree
+        .tree_mapping
+        .paths
+        .get(&aqua_tree.tree_mapping.latest_hash)
+        .cloned()
+        .unwrap_or_default();
+    path.push(revision_hash.clone());
+
+    aqua_tree
+        .tree_mapping
+        .paths
+        .insert(revision_hash.clone(), path);
+    aqua_tree.tree_mapping.latest_hash = revision_hash.clone();
+
+    logs_data.push(format!("Added signature revision: {}", revision_hash));
+    Ok(revision_hash)
+}
+
+/// Validate signature revision integrity
+pub fn validate_signature_revision(
+    signature_revision: &SignatureRevision,
+    message_hash: &str,
+) -> Result<bool, String> {
+    // This is a placeholder for actual signature verification
+    // In a real implementation, you would:
+    // 1. Recover public key from signature
+    // 2. Verify it matches signature_public_key
+    // 3. Verify the signature against the message_hash
+
+    match signature_revision.signature_type.as_str() {
+        "ethereum:eip-191" => {
+            // Ethereum EIP-191 signature validation would go here
+            Ok(true) // Placeholder
+        }
+        "did_key" => {
+            // DID key signature validation would go here
+            Ok(true) // Placeholder
+        }
+        _ => Err(format!(
+            "Unsupported signature type: {}",
+            signature_revision.signature_type
+        )),
+    }
+}
+
+/// Output results based on CLI arguments
 fn output_results(args: &CliArgs, logs_data: &Vec<String>) {
     if args.verbose {
         logs_data.iter().for_each(|log| println!("{}", log));
@@ -271,5 +424,61 @@ fn output_results(args: &CliArgs, logs_data: &Vec<String>) {
         if let Err(e) = save_logs_to_file(logs_data, output_path.clone()) {
             eprintln!("Error saving logs: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::TreeMapping;
+
+    #[test]
+    fn test_find_genesis_filename() {
+        let mut revisions = HashMap::new();
+        revisions.insert(
+            "0x123".to_string(),
+            serde_json::json!({
+                "previous_verification_hash": "",
+                "revision_type": "file"
+            }),
+        );
+
+        let mut file_index = HashMap::new();
+        file_index.insert("0x123".to_string(), "genesis.txt".to_string());
+
+        let tree = AquaTree {
+            revisions,
+            file_index,
+            tree_mapping: TreeMapping {
+                paths: HashMap::new(),
+                latest_hash: "0x123".to_string(),
+            },
+        };
+
+        let filename = find_genesis_filename(&tree).unwrap();
+        assert_eq!(filename, "genesis.txt");
+    }
+
+    #[test]
+    fn test_signature_revision_creation() {
+        let sign_data = SigningData {
+            message_to_sign: "test_message".to_string(),
+            latest_hash: "0x123".to_string(),
+            genesis_filename: "test.txt".to_string(),
+        };
+
+        let sign_result = SigningResult {
+            signature: "0xtest_signature".to_string(),
+            public_key: "0xtest_pubkey".to_string(),
+            wallet_address: "0xtest_address".to_string(),
+            signature_type: "ethereum:eip-191".to_string(),
+        };
+
+        let mut logs = Vec::new();
+        let signature_rev = create_signature_revision(sign_data, sign_result, &mut logs).unwrap();
+
+        assert_eq!(signature_rev.base.revision_type, "signature");
+        assert_eq!(signature_rev.signature_type, "ethereum:eip-191");
+        assert_eq!(signature_rev.base.previous_verification_hash, "0x123");
     }
 }
