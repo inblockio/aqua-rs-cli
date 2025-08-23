@@ -51,7 +51,7 @@ pub fn read_aqua_data(path: &PathBuf) -> Result<AquaTree, String> {
 }
 
 /// Convert legacy v2 PageData to v3 AquaTree format
-fn convert_page_data_to_aqua_tree(page_data: LegacyPageData) -> Result<AquaTree, String> {
+fn convert_page_data_to_aqua_tree(_page_data: LegacyPageData) -> Result<AquaTree, String> {
     // This is a placeholder for backward compatibility
     // In a real implementation, it's to properly convert the structure
     // For now, we'll return an error encouraging v3 format usage
@@ -137,8 +137,8 @@ pub fn generate_file_hash(content: &[u8], nonce: &str) -> String {
 
 /// Generate random nonce
 pub fn generate_nonce() -> String {
-    use rand::{thread_rng, Rng};
-    let mut rng = thread_rng();
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
     (0..64)
         .map(|_| format!("{:02x}", rng.gen::<u8>()))
         .collect()
@@ -209,7 +209,10 @@ pub fn validate_revision_type(revision_type: &str) -> Result<RevisionType, Valid
 }
 
 /// Extract revision from AquaTree by hash
-pub fn get_revision_by_hash(aqua_tree: &AquaTree, hash: &str) -> Option<&serde_json::Value> {
+pub fn get_revision_by_hash<'a>(
+    aqua_tree: &'a AquaTree,
+    hash: &str,
+) -> Option<&'a serde_json::Value> {
     aqua_tree.revisions.get(hash)
 }
 
