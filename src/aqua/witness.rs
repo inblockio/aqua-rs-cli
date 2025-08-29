@@ -37,14 +37,13 @@ use aqua_verifier::util::get_hash_sum;
 /// - Panics if:
 ///   - Unable to read the Aqua data file
 ///   - No Aqua chain is found
-///   - Unable to initialize Tokio runtime
 ///   - Witnessing process fails
 ///
 /// # Logging
 ///
 /// - Supports verbose and non-verbose logging
 /// - Can save logs to a file if an output path is specified
-pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path: PathBuf) {
+pub(crate) async fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witness_path: PathBuf) {
     let mut logs_data: Vec<String> = Vec::new();
 
     println!("Witnessing file: {:?}", witness_path);
@@ -94,19 +93,6 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
 
     let (_genesis_hash, genesis_revision) = genesis_hash_revision_option.unwrap();
 
-    // Initialize Tokio runtime
-    let runtime_result = tokio::runtime::Runtime::new().map_err(|e| e.to_string());
-
-    if runtime_result.is_err() {
-        println!(
-            "Error initializing tokio runtime {:#?}",
-            runtime_result.err()
-        );
-        panic!("Aqua cli encountered an error")
-    }
-
-    let runtime = runtime_result.unwrap();
-
     // Determine the last revision hash
     let mut last_revision_hash = "".to_string();
 
@@ -126,9 +112,9 @@ pub(crate) fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier, witne
     let witness_event_verification_hash = get_hash_sum(&witness_event_verification_string);
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
 
-    // Obtain witness authentication via message server
-    let result: Result<WitnessPayload, String> =
-        runtime.block_on(async { witness_message_server(witness_event_verification_hash, chain).await });
+    // Obtain witness authentication via message server - now using .await directly
+    let result: Result<WitnessPayload, String> = 
+        witness_message_server(witness_event_verification_hash, chain).await;
 
     if result.is_err() {
         println!("Signing failed: {:#?}", result.err());

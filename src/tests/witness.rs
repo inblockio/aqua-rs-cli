@@ -4,7 +4,7 @@ pub mod tests {
     use tempfile::tempdir;
     // use tempfile::tempdir;
     // use super::*; // Import parent module's structs and functions
-    use verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
+    use aqua_verifier::aqua_verifier::{AquaVerifier, VerificationOptions};
 
     use crate::{aqua::witness::cli_winess_chain, models::CliArgs};
 
@@ -39,6 +39,15 @@ pub mod tests {
             output: Some(temp_dir.path().join("test_output_logs.txt")),
             level: Some("2".to_string()), // Adjust as needed
             keys_file: Some(keys),
+            // New v3.2 fields
+            link: None,
+            target: None,
+            link_type: None,
+            identity_form: None,
+            domain_id: None,
+            form_type: None,
+            validate_v3: None,
+            compliance_level: None,
         };
 
        

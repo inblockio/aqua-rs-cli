@@ -1,6 +1,17 @@
 {
-    "mnemonic": "hidden excite anxiety language enrich eagle rough furnace fluid auto inherit surround hill index void struggle usual program actress pluck demise kite state car",
-    
-    "nostr_sk": "sample",
-    "did:key": "sample"
+  "keys": [
+    {
+      "id": "sample-key-1",
+      "type": "ed25519",
+      "public_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "private_key": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    },
+    {
+      "id": "sample-key-2", 
+      "type": "ed25519",
+      "public_key": "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+      "private_key": "0987654321fedcba0987654321fedcba0987654321fedcba0987654321fedcba"
+    }
+  ],
+  "default_key": "sample-key-1"
 }

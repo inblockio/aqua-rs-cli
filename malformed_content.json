@@ -1,0 +1,23 @@
+{
+  "pages": [
+    {
+      "genesis_hash": "test_hash_123",
+      "domain_id": "test",
+      "title": "malformed.json",
+      "namespace": 0,
+      "chain_height": 0,
+      "revisions": {
+        "test_hash_123": {
+          "content": {
+            "invalid_field": {
+              "data": "This should cause an error"
+            }
+          },
+          "timestamp": "2024-01-01T00:00:00Z",
+          "signatures": {},
+          "witnesses": {}
+        }
+      }
+    }
+  ]
+} 
