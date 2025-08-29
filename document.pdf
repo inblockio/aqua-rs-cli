@@ -1,0 +1,9 @@
+This is a sample document for testing aqua-cli commands.
+
+This document contains sample text that can be used to:
+1. Generate an aqua chain using the --file command
+2. Test signing functionality
+3. Test witnessing functionality
+4. Test verification functionality
+
+The document is intentionally simple to make testing easier.
