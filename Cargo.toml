@@ -1,7 +1,7 @@
 [package]
 name = "aqua-cli" #"aqua-verifier-cli"
 authors=["dalmasonto<https://github.com/dalmasonto>","Arthur-Kamau<https://github.com/Arthur-Kamau>" ]
-version = "1.2.1"
+version = "3.2.0"
 edition = "2021"
 license-file = "LICENCE"
 description = "Aqua protocol command line tool that enable you to verify, sign and witness aqua chains."
@@ -17,7 +17,7 @@ exclude = ["target", "*.lock", ".vscode", ".idea"]    # Files or directories to 
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.0", features = ["full", "macros", "rt-multi-thread"] }
 warp = "0.3"
 hyper = "0.14"
 futures = "0.3"
@@ -48,6 +48,10 @@ eyre = "0.6"
 bip32 = "0.5"
 k256 = { version = "0.13", features = ["ecdsa"] }
 tempfile = "3.3"
+# New v3.2 dependencies
+colored = "2.0"
+rayon = "1.8"  # ✅ NEW: For parallel signature processing
+lazy_static = "1.4"  # ✅ NEW: For global async logger
 
 
 # Specify the binary target
