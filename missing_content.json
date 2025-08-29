@@ -1,0 +1,18 @@
+{
+  "pages": [
+    {
+      "genesis_hash": "test_hash_456",
+      "domain_id": "test",
+      "title": "missing_content.json",
+      "namespace": 0,
+      "chain_height": 0,
+      "revisions": {
+        "test_hash_456": {
+          "timestamp": "2024-01-01T00:00:00Z",
+          "signatures": {},
+          "witnesses": {}
+        }
+      }
+    }
+  ]
+} 
