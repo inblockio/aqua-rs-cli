@@ -6,10 +6,56 @@ use crate::utils::{
     read_secreat_keys_buffered, 
     save_logs_to_file, 
     save_page_data_buffered,
-    AsyncLogger,  // ✅ NEW: Async logging
-    LogLevel,     // ✅ NEW: Log levels
     get_global_logger,  // ✅ NEW: Global logger access
 };
+
+/// ✅ SIMPLE FIX: Always use the same output filename
+fn get_consistent_signed_filename(input_path: &PathBuf) -> PathBuf {
+    let file_stem = input_path.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("sample.chain");
+    
+    // Remove any existing .signed suffix to prevent stacking
+    let clean_stem = if file_stem.ends_with(".signed") {
+        &file_stem[..file_stem.len() - 7] // Remove ".signed"
+    } else {
+        file_stem
+    };
+    
+    // Always generate the same pattern: {clean_name}.signed.json
+    input_path.with_file_name(format!("{}.signed.json", clean_stem))
+}
+
+/// ✅ CLEANUP: Remove any staircase files that might have been created
+/// ✅ IMPROVED: More comprehensive cleanup of staircase files
+fn cleanup_staircase_files(original_path: &PathBuf) {
+    use std::fs;
+    
+    if let Some(parent) = original_path.parent() {
+        if let Some(stem) = original_path.file_stem() {
+            let stem_str = stem.to_string_lossy();
+            
+            // Check for various staircase patterns
+            let staircase_patterns = [
+                format!("{}.signed.signed.json", stem_str),
+                format!("{}.signed.signed.signed.json", stem_str),
+                format!("{}.witnessed.witnessed.json", stem_str),
+                format!("{}.verified.verified.json", stem_str),
+            ];
+            
+            for pattern in staircase_patterns {
+                let staircase_file = parent.join(&pattern);
+                
+                if staircase_file.exists() && staircase_file != *original_path {
+                    match fs::remove_file(&staircase_file) {
+                        Ok(_) => println!("Cleaned up staircase file: {:?}", staircase_file),
+                        Err(e) => eprintln!("Warning: Could not remove staircase file {:?}: {}", staircase_file, e),
+                    }
+                }
+            }
+        }
+    }
+}
 use aqua_verifier_rs_types::models::content::RevisionContentSignature;
 use aqua_verifier_rs_types::models::page_data::PageData;
 use std::env;
@@ -141,6 +187,10 @@ async fn process_signing_chain(
     };
 
     process_verification_and_save(aqua_verifier, aqua_page_data, rev_sig, sign_path, logs_data)?;
+    
+    // ✅ CLEANUP: Remove any staircase files that might have been created
+    cleanup_staircase_files(sign_path);
+    
     Ok(())
 }
 
@@ -598,8 +648,27 @@ fn process_verification_and_save(
         }
     });
 
-    // ✅ OPTIMIZED: Using buffered I/O with atomic write for better performance
-    save_page_data_buffered(&res_page_data, sign_path, "signed.json".to_string()).map_err(|e| {
+    // ✅ FIXED: Generate proper output filename that prevents double generation
+    let output_path = get_consistent_signed_filename(sign_path);
+
+    let debug_message = format!("DEBUG: Input path: {:?}, Output path: {:?}", sign_path, output_path);
+    println!("{}", debug_message);
+    logs_data.push(debug_message.clone());
+    if let Some(logger) = get_global_logger() {
+        logger.info(debug_message, None);
+    }
+
+    // ✅ CRITICAL FIX: Check if output file already exists and handle appropriately
+    if output_path.exists() {
+        let overwrite_message = format!("Info : Output file {:?} already exists, overwriting...", output_path);
+        logs_data.push(overwrite_message.clone());
+        if let Some(logger) = get_global_logger() {
+            logger.warning(overwrite_message, None);
+        }
+    }
+
+    // ... save logic ...
+    save_page_data_buffered(&res_page_data, &output_path, "".to_string()).map_err(|e| {
         let error_message = format!("Error saving page data: {}", e);
         logs_data.push(error_message.clone());
         if let Some(logger) = get_global_logger() {
@@ -607,6 +676,12 @@ fn process_verification_and_save(
         }
         error_message
     })?;
+
+    let success_message = format!("Info : Successfully saved signed data to: {:?}", output_path);
+    logs_data.push(success_message.clone());
+    if let Some(logger) = get_global_logger() {
+        logger.info(success_message, None);
+    }
 
     Ok(())
 }
