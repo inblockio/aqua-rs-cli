@@ -1,0 +1,26 @@
+{
+  "version": "3.2.0",
+  "chain_id": "sample_chain_v3",
+  "revisions": [
+    {
+      "revision_type": "content",
+      "content_hash": "0xcf160dd8aa04bce81b926967bb89c5a3b440cc138be8b35a42c6021d7efffdcd",
+      "previous_verification_hash": null,
+      "timestamp": 1725367002,
+      "metadata": {
+        "filename": "sample.txt",
+        "size": 325,
+        "domain_id": "PlOtcY2KkW",
+        "title": "sample.txt",
+        "namespace": 0,
+        "chain_height": 0
+      }
+    }
+  ],
+  "metadata": {
+    "created_at": 1725367002,
+    "chain_type": "document",
+    "compliance_version": "3.2.0",
+    "domain_id": "PlOtcY2KkW"
+  }
+}

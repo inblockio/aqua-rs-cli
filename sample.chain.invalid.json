@@ -1,0 +1,12 @@
+{
+  "version": "2.1.0",
+  "chain_id": "invalid_chain",
+  "revisions": [
+    {
+      "revision_type": "content",
+      "content_hash": "invalid_hash_format",
+      "previous_verification_hash": null,
+      "timestamp": 1725367002
+    }
+  ]
+}
