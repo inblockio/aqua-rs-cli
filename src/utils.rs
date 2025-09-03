@@ -4,17 +4,27 @@ use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 use tokio::fs as tokio_fs;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 use tokio::sync::mpsc;
 use tokio::task;
 use tokio::time::sleep;
 use aqua_verifier_rs_types::models::page_data::PageData;
-use lazy_static::lazy_static;
-use once_cell::sync::OnceCell;
+
+
 
 use crate::models::SecreatKeys;
 
 extern crate serde_json_path_to_error as serde_json;
+
+fn get_smart_output_path(original_path: &Path, extension: &str) -> PathBuf {
+    if original_path.to_string_lossy().contains("signed") {
+        original_path.to_path_buf()
+    } else {
+        let file_stem = original_path.file_stem().unwrap_or_default();
+        let parent = original_path.parent().unwrap_or_else(|| Path::new("."));
+        parent.join(format!("{}.{}", file_stem.to_string_lossy(), extension))
+    }
+}
 
 pub fn save_logs_to_file(logs : &Vec<String>, output_file : PathBuf, ) -> Result<String, String> {
  // Open the file in append mode, create it if it doesn't exist
@@ -79,8 +89,15 @@ pub fn read_secreat_keys(path: &PathBuf) -> Result<SecreatKeys, String> {
 
 // Assuming `PageData` has serde::Serialize trait implemented
 pub fn save_page_data(aqua_page_data: &PageData, original_path: &Path, extension : String) -> Result<(), String> {
-    // Change the file extension to "_signed.json"
-    let output_path = original_path.with_extension(extension);
+    let output_path = if original_path.to_string_lossy().contains("signed") {
+        // Already signed - overwrite the same file
+        original_path.to_path_buf()
+    } else {
+        // Not signed yet - create new signed file
+        let file_stem = original_path.file_stem().unwrap_or_default();
+        let parent = original_path.parent().unwrap_or_else(|| Path::new("."));
+        parent.join(format!("{}.{}", file_stem.to_string_lossy(), extension))
+    };
 
     // Serialize PageData to JSON
     match serde_json::to_string_pretty(aqua_page_data) {
@@ -163,7 +180,15 @@ pub fn read_secreat_keys_buffered(path: &PathBuf) -> Result<SecreatKeys, String>
 
 /// ✅ OPTIMIZED: Buffered page data saving with atomic write
 pub fn save_page_data_buffered(aqua_page_data: &PageData, original_path: &Path, extension: String) -> Result<(), String> {
-    let output_path = original_path.with_extension(&extension);
+    let output_path = if original_path.to_string_lossy().contains("signed") {
+        // Already signed - overwrite the same file
+        original_path.to_path_buf()
+    } else {
+        // Not signed yet - create new signed file
+        let file_stem = original_path.file_stem().unwrap_or_default();
+        let parent = original_path.parent().unwrap_or_else(|| Path::new("."));
+        parent.join(format!("{}.{}", file_stem.to_string_lossy(), extension))
+    };
     let temp_path = output_path.with_extension(format!("{}.tmp", &extension));
     
     // Create temporary file first
@@ -219,7 +244,15 @@ pub async fn read_secreat_keys_async(path: &PathBuf) -> Result<SecreatKeys, Stri
 
 /// ✅ NEW: Async version for non-blocking I/O
 pub async fn save_page_data_async(aqua_page_data: &PageData, original_path: &Path, extension: String) -> Result<(), String> {
-    let output_path = original_path.with_extension(extension);
+    let output_path = if original_path.to_string_lossy().contains("signed") {
+        // Already signed - overwrite the same file
+        original_path.to_path_buf()
+    } else {
+        // Not signed yet - create new signed file
+        let file_stem = original_path.file_stem().unwrap_or_default();
+        let parent = original_path.parent().unwrap_or_else(|| Path::new("."));
+        parent.join(format!("{}.{}", file_stem.to_string_lossy(), extension))
+    };
     
     let json_data = serde_json::to_string_pretty(aqua_page_data)
         .map_err(|e| format!("Failed to serialize data: {}", e))?;
@@ -504,7 +537,6 @@ pub async fn save_logs_batched(
     Ok(format!("Logs written successfully in {} batches", (logs.len() + batch_size - 1) / batch_size))
 }
 
-/// ✅ NEW: Global async logger instance
 lazy_static::lazy_static! {
     static ref ASYNC_LOGGER: Arc<Mutex<Option<AsyncLogger>>> = Arc::new(Mutex::new(None));
 }
