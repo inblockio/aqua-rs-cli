@@ -194,7 +194,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
             .help("keys file json containing nounce, nostr_sk and did:key"))
         .group(ArgGroup::new("operation")
-            .args(["authenticate", "sign", "witness", "file", "delete"])
+            .args(["authenticate", "sign", "witness", "file", "delete", "link", "identity-form", "validate-v3"])
             .required(true))
         .get_matches();
 
