@@ -94,21 +94,21 @@ pub(crate) async fn cli_winess_chain(args: CliArgs, aqua_verifier: AquaVerifier,
     let (_genesis_hash, genesis_revision) = genesis_hash_revision_option.unwrap();
 
     // Determine the last revision hash
-    let mut last_revision_hash = "".to_string();
+    let mut _last_revision_hash = "".to_string();
 
     if aqua_chain.revisions.len() == 1 {
-        last_revision_hash = genesis_revision.metadata.verification_hash.to_string();
+        _last_revision_hash = genesis_revision.metadata.verification_hash.to_string();
     } else {
         let (_last_hash, last_rev) = aqua_chain
             .revisions
             .get(aqua_chain.revisions.len() - 1)
             .expect("Expected a revision as revisions are more than one");
-        last_revision_hash = last_rev.metadata.verification_hash.to_string();
+        _last_revision_hash = last_rev.metadata.verification_hash.to_string();
     }
     
     // Generate witness event verification hash
     let empty_hash: String = "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26".to_string();
-    let witness_event_verification_string = format!("{}{}", empty_hash, last_revision_hash);
+    let witness_event_verification_string = format!("{}{}", empty_hash, _last_revision_hash);
     let witness_event_verification_hash = get_hash_sum(&witness_event_verification_string);
     let chain: String = env::var("chain").unwrap_or("sepolia".to_string());
 

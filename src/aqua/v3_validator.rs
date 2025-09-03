@@ -165,7 +165,7 @@ impl AquaV3Validator {
     fn validate_single_revision(
         &self,
         revision: &Value,
-        index: usize,
+        _index: usize,
         result: &mut ValidationResult,
     ) -> Result<()> {
         // Get revision type

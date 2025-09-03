@@ -121,7 +121,7 @@ fn process_identity_form_creation(
 
 /// Create placeholder form data for demonstration
 fn create_placeholder_form_data(
-    form_path: &PathBuf,
+    _form_path: &PathBuf,
     logs_data: &mut Vec<String>,
 ) -> Result<HashMap<String, Value>, String> {
     logs_data.push("Creating placeholder form data".to_string());
