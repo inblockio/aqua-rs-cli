@@ -1,18 +1,19 @@
-use std::{fs::{self, File, OpenOptions}, path::{Path, PathBuf}};
+use aqua_verifier::model::signature::Credentials;
+use aqua_verifier_rs_types::models::{
+    chain::AquaChain,
+    protocol_logs::{ProtocolLogs, ProtocolLogsType},
+};
 use std::io::Write;
-use aqua_verifier_rs_types::models::page_data::PageData;
+use std::{
+    fs::{self,  OpenOptions},
+    path::{Path, PathBuf},
+};
 
-use crate::models::SecreatKeys;
-
-
+use crate::models::CliArgs;
 extern crate serde_json_path_to_error as serde_json;
 
-
-
-pub fn save_logs_to_file(logs : &Vec<String>, output_file : PathBuf, ) -> Result<String, String> {
-
-
- // Open the file in append mode, create it if it doesn't exist
+pub fn save_logs_to_file(logs: &Vec<String>, output_file: PathBuf) -> Result<String, String> {
+    // Open the file in append mode, create it if it doesn't exist
     let mut file = match OpenOptions::new()
         .create(true)
         .append(true)
@@ -32,57 +33,58 @@ pub fn save_logs_to_file(logs : &Vec<String>, output_file : PathBuf, ) -> Result
     Ok("Log written successfully".to_string())
 }
 
-pub fn read_aqua_data(path: &PathBuf) -> Result<PageData, String> {
+pub fn read_aqua_data(path: &PathBuf) -> Result<AquaChain, String> {
     let data = fs::read_to_string(path);
     match data {
-        Ok(data) =>{
-            let res= serde_json::from_str::<PageData>(&data);
+        Ok(data) => {
+            let res = serde_json::from_str::<AquaChain>(&data);
             match res {
-                Ok(res_data)=>{
-                    Ok(res_data)
-                }
-                Err(err_data)=>{
+                Ok(res_data) => Ok(res_data),
+                Err(err_data) => {
                     return Err(format!("Error, parsing json {}", err_data));
                 }
             }
         }
-        Err(e)=>{
+        Err(e) => {
             return Err(format!("Error , {}", e));
         }
     }
 }
 
-
-pub fn read_secreat_keys(path: &PathBuf) -> Result<SecreatKeys, String> {
+pub fn read_secreat_keys(path: &PathBuf) -> Result<Credentials, String> {
     let data = fs::read_to_string(path);
     match data {
-        Ok(data) =>{
-            let res= serde_json::from_str::<SecreatKeys>(&data);
+        Ok(data) => {
+            let res = serde_json::from_str::<Credentials>(&data);
             match res {
-                Ok(res_data)=>{
-                    Ok(res_data)
-                }
-                Err(err_data)=>{
+                Ok(res_data) => Ok(res_data),
+                Err(err_data) => {
                     return Err(format!("Error, parsing json {}", err_data));
                 }
             }
         }
-        Err(e)=>{
+        Err(e) => {
             return Err(format!("Error , {}", e));
         }
     }
 }
 
-
-// Assuming `PageData` has serde::Serialize trait implemented
-pub fn save_page_data(aqua_page_data: &PageData, original_path: &Path, extension : String) -> Result<(), String> {
-    // Change the file extension to "_signed.json"
-    let output_path = original_path.with_extension(extension);
+pub fn save_page_data(
+    aqua_page_data: &AquaChain,
+    original_path: &Path,
+    extension: String,
+) -> Result<(), String> {
+    // Determine the output path based on the file extension
+    let output_path: PathBuf = if original_path.extension().map_or(false, |ext| ext == "json") {
+        original_path.to_path_buf() // If it's a JSON file, overwrite it
+    } else {
+        original_path.with_extension(extension) // Otherwise, create a new file with the specified extension
+    };
 
     // Serialize PageData to JSON
     match serde_json::to_string_pretty(aqua_page_data) {
         Ok(json_data) => {
-            // Write JSON data to the new file
+            // Write JSON data to the determined file path
             fs::write(&output_path, json_data).map_err(|e| e.to_string())?;
             println!("Aqua chain data saved to: {:?}", output_path);
             Ok(())
@@ -90,8 +92,6 @@ pub fn save_page_data(aqua_page_data: &PageData, original_path: &Path, extension
         Err(e) => Err(format!("Error serializing PageData: {}", e)),
     }
 }
-
-
 
 pub fn is_valid_json_file(s: &str) -> Result<String, String> {
     let path = PathBuf::from(s);
@@ -126,6 +126,45 @@ pub fn string_to_bool(s: String) -> bool {
         "yes" => true,
         "false" => false,
         "no" => false,
-        _ => false
+        _ => false,
+    }
+}
+
+pub fn log_with_emoji(logs: Vec<ProtocolLogs>) -> Vec<String> {
+    // Vector to store log messages
+    let mut logs_data: Vec<String> = Vec::new();
+
+    // Collect logs with indentation
+    for ele in logs {
+        let log_emoji = match ele.log_type {
+            ProtocolLogsType::ERROR => "❌",
+            ProtocolLogsType::WARNING => "❗",
+            _ => "⭐",
+        };
+
+        logs_data.push(format!(
+            "\t\t {} {:#?} : {}",
+            log_emoji, ele.log_type, ele.log
+        ));
+    }
+    return logs_data;
+}
+
+pub fn oprataion_logs_and_dumps(args: CliArgs, logs_data: Vec<String>) {
+    // Print logs based on verbosity setting
+    if args.verbose {
+        for item in logs_data.clone() {
+            println!("{}", item);
+        }
+    } else {
+        println!("{}", logs_data.last().unwrap_or(&"Result".to_string()))
+    }
+
+    // Save logs to file if output path is specified
+    if args.output.is_some() {
+        let logs = save_logs_to_file(&logs_data, args.output.unwrap());
+        if logs.is_err() {
+            eprintln!("Error: saving logs {}", logs.unwrap());
+        }
     }
 }

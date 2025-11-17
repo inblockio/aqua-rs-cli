@@ -1,58 +1,25 @@
+use aqua_verifier::model::{signature::SignatureType, witness::WitnessType};
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SecreatKeys {
-
-    pub mnemonic: Option<String>,
-    pub nostr_sk: Option<String>,
-    #[serde(rename = "did:key")]
-    pub did_key: Option<String>,
-
-}
 #[derive(Debug, Clone)]
 pub struct CliArgs {
     pub authenticate: Option<PathBuf>,
     pub sign: Option<PathBuf>,
+    pub sign_type: Option<SignatureType>,
     pub witness: Option<PathBuf>,
+    pub witness_type: Option<WitnessType>,
     pub file: Option<PathBuf>,
-    pub remove: Option<PathBuf>,
-    pub remove_count: i32,
     pub verbose: bool,
     pub output: Option<PathBuf>,
     pub level: Option<String>,
     pub keys_file: Option<PathBuf>,
-}
-
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SignPayload {
-   pub signature: String,
-   pub  public_key: String,
-   pub  wallet_address: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WitnessPayload {
-   pub tx_hash: String,
-   pub  network: String,
-   pub  wallet_address: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SignOrWitnessNetwork {
-    pub network: String,
+    pub scalar :  Option<PathBuf>,
+    pub link: Option<Vec<PathBuf>>,
+    pub delete: Option<PathBuf>,
+    pub info: bool,
+    pub content_revision: Option<PathBuf>
     
 }
 
-#[derive(Debug, Serialize)]
-pub struct SignMessage {
-    pub message: String,
-    pub nonce: String,
-}
 
-#[derive(Debug, Serialize)]
-pub struct ResponseMessage {
-    pub status: String,
-}
+

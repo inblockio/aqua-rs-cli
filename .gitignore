@@ -3,3 +3,6 @@
 .env
 keys.json
 /assets_
+*.aqua.json
+*.log
+credentials.json
