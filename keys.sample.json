@@ -1,6 +1,8 @@
 {
-    "mnemonic": "hidden excite anxiety language enrich eagle rough furnace fluid auto inherit surround hill index void struggle usual program actress pluck demise kite state car",
-    
-    "nostr_sk": "sample",
-    "did:key": "sample"
+    "signing": {
+        "mnemonic": "hidden excite anxiety language enrich eagle rough furnace fluid auto inherit surround hill index void struggle usual program actress pluck demise kite state car"
+    },
+    "timestamp": {
+        "nostr_sk": "sample"
+    }
 }

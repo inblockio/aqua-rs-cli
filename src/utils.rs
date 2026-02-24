@@ -1,11 +1,11 @@
-use aqua_verifier::model::signature::Credentials;
-use aqua_verifier_rs_types::models::{
-    chain::AquaChain,
-    protocol_logs::{ProtocolLogs, ProtocolLogsType},
-};
+use aqua_rs_sdk::primitives::log::{LogData, LogType};
+use aqua_rs_sdk::primitives::EthNetwork;
+use aqua_rs_sdk::schema::credentials::CredentialsFile;
+use aqua_rs_sdk::schema::tree::Tree;
+use aqua_rs_sdk::schema::{SigningCredentials, TimestampCredentials};
 use std::io::Write;
 use std::{
-    fs::{self,  OpenOptions},
+    fs::{self, OpenOptions},
     path::{Path, PathBuf},
 };
 
@@ -33,11 +33,11 @@ pub fn save_logs_to_file(logs: &Vec<String>, output_file: PathBuf) -> Result<Str
     Ok("Log written successfully".to_string())
 }
 
-pub fn read_aqua_data(path: &PathBuf) -> Result<AquaChain, String> {
+pub fn read_aqua_data(path: &PathBuf) -> Result<Tree, String> {
     let data = fs::read_to_string(path);
     match data {
         Ok(data) => {
-            let res = serde_json::from_str::<AquaChain>(&data);
+            let res = serde_json::from_str::<Tree>(&data);
             match res {
                 Ok(res_data) => Ok(res_data),
                 Err(err_data) => {
@@ -51,15 +51,59 @@ pub fn read_aqua_data(path: &PathBuf) -> Result<AquaChain, String> {
     }
 }
 
-pub fn read_secreat_keys(path: &PathBuf) -> Result<Credentials, String> {
+pub fn read_credentials(path: &PathBuf) -> Result<CredentialsFile, String> {
     let data = fs::read_to_string(path);
     match data {
         Ok(data) => {
-            let res = serde_json::from_str::<Credentials>(&data);
+            // Try parsing as CredentialsFile first
+            let res = serde_json::from_str::<CredentialsFile>(&data);
             match res {
                 Ok(res_data) => Ok(res_data),
-                Err(err_data) => {
-                    return Err(format!("Error, parsing json {}", err_data));
+                Err(_) => {
+                    // Fallback: try parsing legacy format { "mnemonic": "...", "nostr_sk": "...", "did:key": "..." }
+                    let legacy: Result<serde_json::Value, _> = serde_json::from_str(&data);
+                    match legacy {
+                        Ok(val) => {
+                            let mnemonic = val.get("mnemonic")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let nostr_sk = val.get("nostr_sk")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let did_key_str = val.get("did:key")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+
+                            let _did_key_bytes = if did_key_str.starts_with("0x") {
+                                hex::decode(&did_key_str[2..]).unwrap_or_default()
+                            } else if !did_key_str.is_empty() && did_key_str != "sample" {
+                                hex::decode(&did_key_str).unwrap_or_default()
+                            } else {
+                                Vec::new()
+                            };
+
+                            let signing = SigningCredentials::Cli {
+                                mnemonic: mnemonic.clone(),
+                            };
+                            let timestamp = if !nostr_sk.is_empty() && nostr_sk != "sample" {
+                                TimestampCredentials::Nostr {
+                                    nostr_sk,
+                                }
+                            } else {
+                                TimestampCredentials::Nostr {
+                                    nostr_sk,
+                                }
+                            };
+
+                            Ok(CredentialsFile { signing, timestamp })
+                        }
+                        Err(err_data) => {
+                            Err(format!("Error, parsing keys json {}", err_data))
+                        }
+                    }
                 }
             }
         }
@@ -70,7 +114,7 @@ pub fn read_secreat_keys(path: &PathBuf) -> Result<Credentials, String> {
 }
 
 pub fn save_page_data(
-    aqua_page_data: &AquaChain,
+    aqua_tree: &Tree,
     original_path: &Path,
     extension: String,
 ) -> Result<(), String> {
@@ -81,15 +125,15 @@ pub fn save_page_data(
         original_path.with_extension(extension) // Otherwise, create a new file with the specified extension
     };
 
-    // Serialize PageData to JSON
-    match serde_json::to_string_pretty(aqua_page_data) {
+    // Serialize Tree to JSON
+    match serde_json::to_string_pretty(aqua_tree) {
         Ok(json_data) => {
             // Write JSON data to the determined file path
             fs::write(&output_path, json_data).map_err(|e| e.to_string())?;
             println!("Aqua chain data saved to: {:?}", output_path);
             Ok(())
         }
-        Err(e) => Err(format!("Error serializing PageData: {}", e)),
+        Err(e) => Err(format!("Error serializing Tree: {}", e)),
     }
 }
 
@@ -130,20 +174,20 @@ pub fn string_to_bool(s: String) -> bool {
     }
 }
 
-pub fn log_with_emoji(logs: Vec<ProtocolLogs>) -> Vec<String> {
-    // Vector to store log messages
+pub fn log_with_emoji(logs: Vec<LogData>) -> Vec<String> {
     let mut logs_data: Vec<String> = Vec::new();
 
-    // Collect logs with indentation
     for ele in logs {
         let log_emoji = match ele.log_type {
-            ProtocolLogsType::ERROR => "❌",
-            ProtocolLogsType::WARNING => "❗",
+            LogType::Error | LogType::FinalError => "❌",
+            LogType::Warning => "❗",
+            LogType::Success => "✅",
+            LogType::Info => "ℹ️",
             _ => "⭐",
         };
 
         logs_data.push(format!(
-            "\t\t {} {:#?} : {}",
+            "\t\t {} {:?} : {}",
             log_emoji, ele.log_type, ele.log
         ));
     }
@@ -166,5 +210,22 @@ pub fn oprataion_logs_and_dumps(args: CliArgs, logs_data: Vec<String>) {
         if logs.is_err() {
             eprintln!("Error: saving logs {}", logs.unwrap());
         }
+    }
+}
+
+pub fn format_method_error(err: &aqua_rs_sdk::primitives::MethodError) -> Vec<String> {
+    match err {
+        aqua_rs_sdk::primitives::MethodError::WithLogs(logs) => {
+            log_with_emoji(logs.clone())
+        }
+        other => vec![format!("{}", other)],
+    }
+}
+
+pub fn parse_eth_network(network_str: &str) -> EthNetwork {
+    match network_str.to_lowercase().as_str() {
+        "mainnet" => EthNetwork::Mainnet,
+        "holesky" => EthNetwork::Holesky,
+        _ => EthNetwork::Sepolia,
     }
 }
