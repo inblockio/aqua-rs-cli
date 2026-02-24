@@ -254,6 +254,19 @@ pub fn parse_args() -> Result<CliArgs, String> {
     })
 }
 
+/// Search from CWD upward for the directory containing .env (mirrors dotenv's behavior)
+fn find_dotenv_dir() -> Option<PathBuf> {
+    let mut dir = env::current_dir().ok()?;
+    loop {
+        if dir.join(".env").exists() {
+            return Some(dir);
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
@@ -292,12 +305,26 @@ async fn main() {
     // attempt to read argument keys, if none attempt to read from environment variables
     if args.clone().keys_file.is_none() {
         if !keys_file_env.is_empty() {
-            let res = is_valid_json_file(&keys_file_env);
-            if res.is_ok() {
+            let keys_path = PathBuf::from(&keys_file_env);
+            if is_valid_json_file(&keys_file_env).is_ok() {
+                // Found directly (absolute path or relative to CWD)
                 println!("Reading keys file from env");
-                keys_file = Some(PathBuf::from(keys_file_env))
+                keys_file = Some(keys_path);
+            } else if keys_path.is_relative() {
+                // If relative path, try resolving relative to the .env file's directory
+                if let Some(env_dir) = find_dotenv_dir() {
+                    let resolved = env_dir.join(&keys_path);
+                    if is_valid_json_file(&resolved.to_string_lossy()).is_ok() {
+                        println!("Reading keys file from env (resolved from .env directory)");
+                        keys_file = Some(resolved);
+                    } else {
+                        eprintln!("Warning: keys file '{}' from .env not found, signing/witnessing will require --keys-file argument", keys_file_env);
+                    }
+                } else {
+                    eprintln!("Warning: keys file '{}' from .env not found, signing/witnessing will require --keys-file argument", keys_file_env);
+                }
             } else {
-                panic!("Error with key file provided in the env {:#?}", res.err())
+                eprintln!("Warning: keys file '{}' from .env not found, signing/witnessing will require --keys-file argument", keys_file_env);
             }
         }
     } else {

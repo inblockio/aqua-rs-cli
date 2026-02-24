@@ -47,15 +47,15 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
             let wrapper = AquaTreeWrapper::new(tree, None, None);
 
             match aquafier.verify_aqua_tree(wrapper, file_objects).await {
-                Ok((is_valid, message, log_entries)) => {
-                    if is_valid {
+                Ok(res) => {
+                    if res.is_valid {
                         logs_data.push("✅ Successfully verified Aqua chain".to_string());
                     } else {
-                        logs_data.push(format!("❌ Verification failed: {}", message));
+                        logs_data.push(format!("❌ Verification failed: {}", res.status));
                     }
 
                     // Add detailed logs
-                    for log_entry in &log_entries {
+                    for log_entry in &res.logs {
                         logs_data.push(log_entry.display());
                     }
                 }
