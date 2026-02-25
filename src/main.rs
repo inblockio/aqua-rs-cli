@@ -54,6 +54,11 @@ EXAMPLES:
 
     aqua-cli file.json --link file2.json
 
+    # Sign targeting a specific revision (enables tree/DAG branching):
+    aqua-cli -s chain.json --sign-type cli -k keys.json --previous-hash 0x<revision_hash>
+    # Witness targeting a specific revision:
+    aqua-cli -w chain.json --witness-tsa --previous-hash 0x<revision_hash>
+
 SUMMARY
    * aqua-cli expects at least one parameter -s,-v,-w or -f.
    * in your environment set the
