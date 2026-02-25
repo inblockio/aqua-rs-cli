@@ -1,8 +1,7 @@
 ## AQUA VERIFIER RS
 CLI tools to validate aqua chain.
 
-## Versioning
-Ensure to use the same version as the Aqua protocol version you are using for example use version 1.2.XX to verify  1.2.0 Aqua chain Json file.
+This project depends on [aqua-rs-sdk](https://github.com/inblockio/aqua-rs-sdk) v4.
 
 ## optional
 in your environment set the following variables.<br/>
