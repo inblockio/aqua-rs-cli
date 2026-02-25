@@ -3,7 +3,8 @@ name = "aqua-cli" #"aqua-verifier-cli"
 authors=["dalmasonto<https://github.com/dalmasonto>","Arthur-Kamau<https://github.com/Arthur-Kamau>" ]
 version = "1.3.0"
 edition = "2021"
-license-file = "LICENCE"
+license = "AGPL-3.0-or-later"
+license-file = "LICENSE"
 description = "Aqua protocol command line tool that enable you to verify, sign and witness aqua chains."
 readme = "README.md"
 keywords = ["aqua", "aqua-protocol"] # Keywords for crates.io search
@@ -32,7 +33,11 @@ hex = "0.4"
 tempfile = "3.3"
 
 
-# Specify the binary target
+# Specify the binary targets
 [[bin]]
-name = "aqua-cli" # This will be the command-line executable name
+name = "aqua-cli"
 path = "src/main.rs"
+
+[[bin]]
+name = "aqua-notary"
+path = "src/notary_main.rs"

@@ -109,6 +109,15 @@ aqua-cli --list-templates
 3. to get start run `./aqua-cli --help`
 
 
+## Licensing
+
+This project is dual-licensed:
+- **Open source**: GNU Affero General Public License v3.0 (AGPLv3) – see [LICENSE](LICENSE)
+- **Commercial**: Available under a proprietary commercial license from inblock.io assets GmbH for use cases that require closed-source integration, no source disclosure, or additional warranties/support.
+
+All contributions are governed by our [Contributor License Agreement](CLA.md).
+By submitting code you agree to the CLA, which assigns all economic rights to inblock.io assets GmbH, enabling this dual model.
+
 ## Testing using the `test_aqua_cli` script
 
 1. Give the file some permissions

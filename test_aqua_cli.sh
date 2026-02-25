@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) 2024–2026 inblock.io assets GmbH
+# SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial (contact legal@inblock.io)
+
 
 # Define variables
 CLI="./target/debug/aqua-cli"

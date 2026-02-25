@@ -1,3 +1,6 @@
+// Copyright (c) 2024–2026 inblock.io assets GmbH
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial (contact legal@inblock.io)
+
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
