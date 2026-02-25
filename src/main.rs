@@ -41,6 +41,7 @@ COMMANDS:
    * -k or --key-file to specify the file containing keys (this can also be set in the env).
    * -d or --delete remove revision from an aqua json file, by default removes the last revision.
    * --link to link files (requires two filenames or paths as parameter).
+   * --previous-hash to target a specific revision instead of the latest (enables tree/DAG structures).
 
 EXAMPLES:
     aqua-cli -a chain.json
@@ -192,6 +193,13 @@ pub fn parse_args() -> Result<CliArgs, String> {
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
             .help("Link two files (requires two filenames or paths as parameters)"),
         )
+        .arg(
+            Arg::new("previous-hash")
+                .long("previous-hash")
+                .action(ArgAction::Set)
+                .help("Target a specific revision as previous_revision (0x-prefixed lowercase hex hash)")
+                .long_help("Instead of appending to the latest revision, target a specific revision by its hash. This enables tree/DAG structures (e.g., branching from genesis). Only usable with --sign, --witness, or --link."),
+        )
         .group(
             ArgGroup::new("operation")
                 .args(["authenticate", "sign", "witness", "file", "delete", "link", "info"])
@@ -236,6 +244,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .get_many::<String>("link")
         .map(|vals| vals.map(PathBuf::from).collect());
     let info = matches.get_flag("info");
+    let previous_hash = matches.get_one::<String>("previous-hash").cloned();
 
     Ok(CliArgs {
         authenticate,
@@ -251,6 +260,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         link,
         delete,
         info,
+        previous_hash,
     })
 }
 

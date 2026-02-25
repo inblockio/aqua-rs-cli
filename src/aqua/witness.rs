@@ -98,7 +98,11 @@ pub(crate) async fn cli_winess_chain(
                 return;
             }
             let tree = res.unwrap();
-            let wrapper = AquaTreeWrapper::new(tree, None, None);
+            let revision = args.previous_hash.as_ref().map(|h| {
+                h.parse::<aqua_rs_sdk::primitives::RevisionLink>()
+                    .expect("Invalid revision hash format (expected 0x-prefixed lowercase hex)")
+            });
+            let wrapper = AquaTreeWrapper::new(tree, None, revision);
 
             match aquafier.timestamp_aqua_tree(wrapper, &credentials, None, None).await {
                 Ok(op_data) => {

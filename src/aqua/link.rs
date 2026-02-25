@@ -51,7 +51,11 @@ pub(crate) fn cli_link_chain(
     }
     let child_tree = child_chain_data_result.unwrap();
 
-    let parent_wrapper = AquaTreeWrapper::new(parent_tree, None, None);
+    let revision = args.previous_hash.as_ref().map(|h| {
+        h.parse::<aqua_rs_sdk::primitives::RevisionLink>()
+            .expect("Invalid revision hash format (expected 0x-prefixed lowercase hex)")
+    });
+    let parent_wrapper = AquaTreeWrapper::new(parent_tree, None, revision);
     let child_wrapper = AquaTreeWrapper::new(child_tree, None, None);
 
     match aquafier.link_aqua_tree(parent_wrapper, vec![child_wrapper], None) {

@@ -30,4 +30,5 @@ pub struct CliArgs {
     pub link: Option<Vec<PathBuf>>,
     pub delete: Option<PathBuf>,
     pub info: bool,
+    pub previous_hash: Option<String>,
 }
