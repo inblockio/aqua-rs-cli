@@ -5,6 +5,7 @@ pub mod utils;
 
 use crate::models::{CliArgs, SignType, WitnessType};
 use aqua::link::cli_link_chain;
+use aqua::object::cli_create_object;
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
@@ -42,6 +43,8 @@ COMMANDS:
    * -d or --delete remove revision from an aqua json file, by default removes the last revision.
    * --link to link files (requires two filenames or paths as parameter).
    * --previous-hash to target a specific revision instead of the latest (enables tree/DAG structures).
+   * --create-object to create a genesis object revision with a custom template and JSON payload.
+       Requires --template-name <NAME> or --template-hash <HASH>, and --payload <PATH_OR_JSON>.
 
 EXAMPLES:
     aqua-cli -a chain.json
@@ -58,6 +61,13 @@ EXAMPLES:
     aqua-cli -s chain.json --sign-type cli -k keys.json --previous-hash 0x<revision_hash>
     # Witness targeting a specific revision:
     aqua-cli -w chain.json --witness-tsa --previous-hash 0x<revision_hash>
+
+    # Create object with a built-in template name:
+    aqua-cli --create-object --template-name domain --payload domain_data.json
+    # Create object with inline JSON:
+    aqua-cli --create-object --template-name name --payload '{"first_name": "Alice", "last_name": "Smith"}'
+    # Create object with a custom template hash:
+    aqua-cli --create-object --template-hash 0x<hash> --payload data.json
 
 SUMMARY
    * aqua-cli expects at least one parameter -s,-v,-w or -f.
@@ -205,9 +215,43 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .help("Target a specific revision as previous_revision (0x-prefixed lowercase hex hash)")
                 .long_help("Instead of appending to the latest revision, target a specific revision by its hash. This enables tree/DAG structures (e.g., branching from genesis). Only usable with --sign, --witness, or --link."),
         )
+        .arg(
+            Arg::new("create-object")
+                .long("create-object")
+                .action(ArgAction::SetTrue)
+                .help("Create a genesis object revision with a custom template and JSON payload"),
+        )
+        .arg(
+            Arg::new("template-hash")
+                .long("template-hash")
+                .action(ArgAction::Set)
+                .help("Template hash (0x-prefixed lowercase hex) for --create-object"),
+        )
+        .arg(
+            Arg::new("template-name")
+                .long("template-name")
+                .action(ArgAction::Set)
+                .value_parser([
+                    "file", "domain", "email", "name", "phone", "attestation",
+                    "timestamp", "multi-signer", "trust-assertion",
+                    "wallet-identification", "access-grant", "vendor-registration",
+                    "template-registration", "alias-registration", "plugin-registration",
+                ])
+                .help("Built-in template name for --create-object"),
+        )
+        .arg(
+            Arg::new("payload")
+                .long("payload")
+                .action(ArgAction::Set)
+                .help("JSON payload: a file path to a JSON file, or an inline JSON string"),
+        )
+        .group(
+            ArgGroup::new("template")
+                .args(["template-hash", "template-name"])
+        )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object"])
                 .required(true),
         )
         .get_matches();
@@ -250,6 +294,10 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .map(|vals| vals.map(PathBuf::from).collect());
     let info = matches.get_flag("info");
     let previous_hash = matches.get_one::<String>("previous-hash").cloned();
+    let create_object = matches.get_flag("create-object");
+    let template_hash = matches.get_one::<String>("template-hash").cloned();
+    let template_name = matches.get_one::<String>("template-name").cloned();
+    let payload = matches.get_one::<String>("payload").cloned();
 
     Ok(CliArgs {
         authenticate,
@@ -266,6 +314,10 @@ pub fn parse_args() -> Result<CliArgs, String> {
         delete,
         info,
         previous_hash,
+        create_object,
+        template_hash,
+        template_name,
+        payload,
     })
 }
 
@@ -302,6 +354,7 @@ async fn main() {
         && args.file.is_none()
         && args.link.is_none()
         && args.delete.is_none()
+        && !args.create_object
     {
         println!("{}", BASE_LONG_ABOUT);
         return;
@@ -345,6 +398,12 @@ async fn main() {
     } else {
         println!("Reading keys file from arguments");
         keys_file = args.clone().keys_file;
+    }
+
+    if args.create_object {
+        println!("Creating genesis object revision");
+        cli_create_object(args.clone(), &aquafier);
+        return;
     }
 
     match (

@@ -3,3 +3,4 @@ pub mod sign;
 pub mod verify;
 pub mod witness;
 pub mod link;
+pub mod object;

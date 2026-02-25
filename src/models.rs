@@ -31,4 +31,8 @@ pub struct CliArgs {
     pub delete: Option<PathBuf>,
     pub info: bool,
     pub previous_hash: Option<String>,
+    pub create_object: bool,
+    pub template_hash: Option<String>,
+    pub template_name: Option<String>,
+    pub payload: Option<String>,
 }
