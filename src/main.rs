@@ -5,7 +5,7 @@ pub mod utils;
 
 use crate::models::{CliArgs, SignType, WitnessType};
 use aqua::link::cli_link_chain;
-use aqua::object::cli_create_object;
+use aqua::object::{cli_create_object, cli_list_templates};
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
@@ -45,6 +45,7 @@ COMMANDS:
    * --previous-hash to target a specific revision instead of the latest (enables tree/DAG structures).
    * --create-object to create a genesis object revision with a custom template and JSON payload.
        Requires --template-name <NAME> or --template-hash <HASH>, and --payload <PATH_OR_JSON>.
+   * --list-templates to list all available built-in templates with their hashes.
 
 EXAMPLES:
     aqua-cli -a chain.json
@@ -245,13 +246,19 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .action(ArgAction::Set)
                 .help("JSON payload: a file path to a JSON file, or an inline JSON string"),
         )
+        .arg(
+            Arg::new("list-templates")
+                .long("list-templates")
+                .action(ArgAction::SetTrue)
+                .help("List all available built-in templates with their hashes"),
+        )
         .group(
             ArgGroup::new("template")
                 .args(["template-hash", "template-name"])
         )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates"])
                 .required(true),
         )
         .get_matches();
@@ -298,6 +305,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let template_hash = matches.get_one::<String>("template-hash").cloned();
     let template_name = matches.get_one::<String>("template-name").cloned();
     let payload = matches.get_one::<String>("payload").cloned();
+    let list_templates = matches.get_flag("list-templates");
 
     Ok(CliArgs {
         authenticate,
@@ -318,6 +326,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         template_hash,
         template_name,
         payload,
+        list_templates,
     })
 }
 
@@ -345,6 +354,11 @@ async fn main() {
 
     if args.info {
         println!("{}", BASE_LONG_ABOUT);
+        return;
+    }
+
+    if args.list_templates {
+        cli_list_templates();
         return;
     }
 

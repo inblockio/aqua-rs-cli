@@ -35,6 +35,11 @@ Notes : if a keys file is speciefied in the commands it will take precendence ov
 | `-v`, `--verbose` | Show detailed logs |
 | `-i`, `--info` | Show CLI version and help |
 | `--previous-hash` | Target a specific revision by hash instead of the latest (see below) |
+| `--create-object` | Create a genesis object revision with a custom template and JSON payload |
+| `--template-name` | Built-in template name for `--create-object` (see `--list-templates`) |
+| `--template-hash` | Custom template hash (`0x`-prefixed) for `--create-object` |
+| `--payload` | JSON payload: a file path or inline JSON string for `--create-object` |
+| `--list-templates` | List all available built-in templates with their hashes |
 
 ### `--previous-hash` option
 
@@ -54,6 +59,35 @@ aqua-cli -s aqua.json --sign-type cli -k keys.json --previous-hash 0x<genesis_ha
 
 # Witness targeting a specific revision
 aqua-cli -w aqua.json --witness-tsa --previous-hash 0x<revision_hash>
+```
+
+### `--create-object` option
+
+The `--create-object` flag creates a **genesis object revision** — a new aqua chain whose first revision is populated from a structured template and a JSON payload, rather than from a file hash.
+
+It requires:
+- **`--template-name <NAME>`** (a built-in template) **or** **`--template-hash <HASH>`** (a custom `0x`-prefixed hash)
+- **`--payload <PATH_OR_JSON>`** — either a path to a JSON file or an inline JSON string
+
+The output is saved as `<source>.aqua.json` (for file payloads) or `object.aqua.json` (for inline JSON).
+
+```bash
+# Create object using a built-in template name and a JSON file:
+aqua-cli --create-object --template-name domain --payload domain_data.json
+
+# Create object with inline JSON:
+aqua-cli --create-object --template-name name --payload '{"first_name": "Alice", "last_name": "Smith"}'
+
+# Create object with a custom template hash:
+aqua-cli --create-object --template-hash 0x<hash> --payload data.json
+```
+
+### `--list-templates` option
+
+Prints all 15 built-in template names and their corresponding hashes. Useful for discovering the available `--template-name` values or obtaining a hash for `--template-hash`.
+
+```bash
+aqua-cli --list-templates
 ```
 
 ## Local use

@@ -55,6 +55,35 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
     }
 }
 
+/// CLI handler for `--list-templates`.
+/// Prints a formatted table of all 15 built-in template names and their hashes.
+pub(crate) fn cli_list_templates() {
+    let templates: &[(&str, &[u8; 32])] = &[
+        ("file", &File::TEMPLATE_LINK),
+        ("domain", &DomainClaim::TEMPLATE_LINK),
+        ("email", &EmailClaim::TEMPLATE_LINK),
+        ("name", &NameClaim::TEMPLATE_LINK),
+        ("phone", &PhoneClaim::TEMPLATE_LINK),
+        ("attestation", &Attestation::TEMPLATE_LINK),
+        ("timestamp", &TimestampPayload::TEMPLATE_LINK),
+        ("multi-signer", &MultiSigner::TEMPLATE_LINK),
+        ("trust-assertion", &TrustAssertion::TEMPLATE_LINK),
+        ("wallet-identification", &WalletIdentification::TEMPLATE_LINK),
+        ("access-grant", &AccessGrant::TEMPLATE_LINK),
+        ("vendor-registration", &VendorRegistration::TEMPLATE_LINK),
+        ("template-registration", &TemplateRegistration::TEMPLATE_LINK),
+        ("alias-registration", &AliasRegistration::TEMPLATE_LINK),
+        ("plugin-registration", &PluginRegistration::TEMPLATE_LINK),
+    ];
+
+    println!("Built-in Templates:");
+    println!("  {:<28} HASH", "NAME");
+    for (name, link) in templates {
+        let rev = template_link_to_revision_link(link);
+        println!("  {:<28} {}", name, rev);
+    }
+}
+
 /// CLI handler for `--create-object`.
 pub(crate) fn cli_create_object(args: CliArgs, aquafier: &Aquafier) {
     let mut logs_data: Vec<String> = Vec::new();

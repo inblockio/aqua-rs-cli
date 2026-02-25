@@ -35,4 +35,5 @@ pub struct CliArgs {
     pub template_hash: Option<String>,
     pub template_name: Option<String>,
     pub payload: Option<String>,
+    pub list_templates: bool,
 }
