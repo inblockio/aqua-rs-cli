@@ -56,8 +56,10 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
 }
 
 /// CLI handler for `--list-templates`.
-/// Prints a formatted table of all 15 built-in template names and their hashes.
+/// Prints all 15 built-in template names, hashes, and required/optional fields.
 pub(crate) fn cli_list_templates() {
+    let builtin_map = aqua_rs_sdk::builtin_templates();
+
     let templates: &[(&str, &[u8; 32])] = &[
         ("file", &File::TEMPLATE_LINK),
         ("domain", &DomainClaim::TEMPLATE_LINK),
@@ -76,11 +78,42 @@ pub(crate) fn cli_list_templates() {
         ("plugin-registration", &PluginRegistration::TEMPLATE_LINK),
     ];
 
-    println!("Built-in Templates:");
-    println!("  {:<28} HASH", "NAME");
-    for (name, link) in templates {
-        let rev = template_link_to_revision_link(link);
-        println!("  {:<28} {}", name, rev);
+    println!("Built-in Templates:\n");
+    for (name, link_bytes) in templates {
+        let rev = template_link_to_revision_link(link_bytes);
+        println!("  {} ({})", name, rev);
+
+        if let Some(template) = builtin_map.get(*link_bytes) {
+            let schema = template.schema();
+            let required: Vec<&str> = schema
+                .get("required")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                .unwrap_or_default();
+
+            let all_props: Vec<&str> = schema
+                .get("properties")
+                .and_then(|v| v.as_object())
+                .map(|obj| obj.keys().map(|k| k.as_str()).collect())
+                .unwrap_or_default();
+
+            let optional: Vec<&str> = all_props
+                .iter()
+                .filter(|p| !required.contains(p))
+                .copied()
+                .collect();
+
+            if !required.is_empty() {
+                println!("    Required: {}", required.join(", "));
+            }
+            if !optional.is_empty() {
+                println!("    Optional: {}", optional.join(", "));
+            }
+            if required.is_empty() && optional.is_empty() {
+                println!("    (no payload fields)");
+            }
+        }
+        println!();
     }
 }
 

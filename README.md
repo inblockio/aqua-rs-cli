@@ -76,15 +76,29 @@ The output is saved as `<source>.aqua.json` (for file payloads) or `object.aqua.
 aqua-cli --create-object --template-name domain --payload domain_data.json
 
 # Create object with inline JSON:
-aqua-cli --create-object --template-name name --payload '{"first_name": "Alice", "last_name": "Smith"}'
+aqua-cli --create-object --template-name name --payload '{"name": "Alice Smith", "wallet_address": "0x1234567890abcdef1234567890abcdef12345678"}'
 
 # Create object with a custom template hash:
 aqua-cli --create-object --template-hash 0x<hash> --payload data.json
+
+# Example: create a domain claim object using the template hash and a JSON file:
+aqua-cli --create-object \
+  --template-hash 0xce6751a5591dfe428c19c8352cbdd1ec7b030dfbb139ab5a00f60aa1ec305532 \
+  --payload domain_sample.json
+```
+
+**Example `domain_sample.json`:**
+
+```json
+{
+    "domain": "inblock.io",
+    "wallet_address": "0x1234567890abcdef1234567890abcdef12345678"
+}
 ```
 
 ### `--list-templates` option
 
-Prints all 15 built-in template names and their corresponding hashes. Useful for discovering the available `--template-name` values or obtaining a hash for `--template-hash`.
+Prints all 15 built-in template names, their corresponding hashes, and the required/optional payload fields for each template. Useful for discovering the available `--template-name` values, obtaining a hash for `--template-hash`, and understanding what payload fields each template expects.
 
 ```bash
 aqua-cli --list-templates
