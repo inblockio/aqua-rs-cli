@@ -22,7 +22,7 @@ tokio = { version = "1", features = ["full"] }
 serde = "1.0.210"
 serde_json_path_to_error = "0.1.4"
 serde_json = "1.0"
-aqua-rs-sdk = { path = "../aqua-rs-sdk" }
+aqua-rs-sdk = { path = "../aqua-rs-sdk", features = ["github"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 console = "0.15"

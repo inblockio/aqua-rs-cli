@@ -1,15 +1,18 @@
 // Copyright (c) 2024–2026 inblock.io assets GmbH
 // SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial (contact legal@inblock.io)
 
+use aqua_rs_sdk::core::signature::sign_did::DIDSigner;
 use aqua_rs_sdk::primitives::log::LogData;
+use aqua_rs_sdk::schema::templates::PlatformIdentityClaim;
 use aqua_rs_sdk::schema::tree::Tree;
 use aqua_rs_sdk::{
     schema::{AquaTreeWrapper, FileData, SigningCredentials},
-    Aquafier,
+    Aquafier, IdentityCredentials,
 };
 use clap::{Parser, Subcommand};
 use std::{
     fs,
+    io::{self, Write as _},
     path::{Path, PathBuf},
 };
 
@@ -52,6 +55,16 @@ enum Commands {
         /// File to inspect
         file: PathBuf,
     },
+    /// Link a platform identity to your DID and create an identity claim
+    Identity {
+        /// Identity provider: github
+        #[arg(default_value = "github")]
+        provider: String,
+        /// GitHub OAuth App client_id (Device Flow — no secret required).
+        /// Defaults to AQUA_GITHUB_CLIENT_ID env var if not set.
+        #[arg(long)]
+        client_id: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -69,6 +82,9 @@ async fn main() {
         }
         Commands::Inspect { file } => {
             cmd_inspect(&file);
+        }
+        Commands::Identity { provider, client_id } => {
+            cmd_identity(&aquafier, &provider, client_id.as_deref(), key_path.as_deref()).await;
         }
     }
 }
@@ -128,6 +144,24 @@ fn load_credentials(sign_type: &str, key_path: Option<&Path>) -> Result<SigningC
         }
         other => Err(format!("Unknown sign type '{}'. Valid options: did, cli, p256", other)),
     }
+}
+
+/// Load raw Ed25519 key bytes from the keys file.
+fn load_did_key_bytes(key_path: Option<&Path>) -> Result<Vec<u8>, String> {
+    let path = key_path.ok_or(
+        "No keys file found. Use --key <path>, set AQUA_KEYS, or create ~/.aqua/keys.json",
+    )?;
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Cannot read keys file {}: {}", path.display(), e))?;
+    let val: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Invalid keys file JSON: {}", e))?;
+
+    let key_str = val
+        .get("did:key")
+        .or_else(|| val.get("signing").and_then(|s| s.get("did_key")))
+        .and_then(|v| v.as_str())
+        .ok_or("No 'did:key' field found in keys file")?;
+    decode_hex(key_str)
 }
 
 fn decode_hex(s: &str) -> Result<Vec<u8>, String> {
@@ -330,5 +364,171 @@ fn cmd_inspect(file: &Path) {
         if !signer.is_empty() {
             println!("       signer: {}", signer);
         }
+    }
+}
+
+/// `aqua-notary identity [provider] [--client-id <id>]`
+///
+/// Full flow:
+///   1. Load Ed25519 key bytes → derive DID via DIDSigner
+///   2. Build IdentityCredentials and obtain a provider
+///   3. initiate() → show user the verification URL + user_code
+///   4. authenticate() → VerifiedIdentity (polls until approved)
+///   5. create_proof() → ProofArtifact (creates public gist)
+///   6. Build PlatformIdentityClaim and write as Aqua tree
+///   7. Save to ~/.aqua/identity_<provider>.aqua.json
+async fn cmd_identity(
+    aquafier: &Aquafier,
+    provider: &str,
+    client_id: Option<&str>,
+    key_path: Option<&Path>,
+) {
+    // ── Step 1: derive DID from key bytes ──────────────────────────────────────
+    let key_bytes = match load_did_key_bytes(key_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
+    };
+
+    let did_string = match DIDSigner::new().derive_did_pkh(&key_bytes) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("❌ Failed to derive DID: {}", e);
+            return;
+        }
+    };
+
+    println!("  DID:  {}", did_string);
+
+    // ── Step 2: build provider ─────────────────────────────────────────────────
+    let credentials = match provider {
+        "github" => {
+            let cid = client_id
+                .map(|s| s.to_string())
+                .or_else(|| std::env::var("AQUA_GITHUB_CLIENT_ID").ok())
+                .unwrap_or_else(|| {
+                    // Fallback to the well-known Aqua CLI client id
+                    "Ov23liUGcmpXoB4GDNHC".to_string()
+                });
+            IdentityCredentials::GitHub { client_id: cid }
+        }
+        other => {
+            eprintln!("❌ Unknown provider '{}'. Currently supported: github", other);
+            return;
+        }
+    };
+
+    let id_provider = match credentials.into_provider() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("❌ Failed to create identity provider: {}", e);
+            return;
+        }
+    };
+
+    // ── Step 3: initiate Device Flow ──────────────────────────────────────────
+    let session = match id_provider.initiate().await {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("❌ Failed to initiate auth flow: {}", e);
+            return;
+        }
+    };
+
+    println!();
+    println!("  Open this URL in your browser:");
+    println!("    {}", session.verification_url);
+    if let Some(code) = &session.user_code {
+        println!();
+        println!("  Enter this code when prompted:");
+        println!("    {}", code);
+    }
+    println!();
+    print!("  Press Enter once you have approved the request… ");
+    let _ = io::stdout().flush();
+    let mut _buf = String::new();
+    let _ = io::stdin().read_line(&mut _buf);
+
+    // ── Step 4: authenticate (poll token endpoint) ────────────────────────────
+    println!("  Authenticating…");
+    let identity = match id_provider.authenticate(&session).await {
+        Ok(id) => id,
+        Err(e) => {
+            eprintln!("❌ Authentication failed: {}", e);
+            return;
+        }
+    };
+
+    println!("  ✅ Authenticated as {} ({})", identity.display_name, identity.provider_id);
+
+    // ── Step 5: create proof (public gist containing DID) ─────────────────────
+    println!("  Creating proof gist…");
+    let proof = match id_provider.create_proof(&session, &identity, &did_string).await {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("❌ Proof creation failed: {}", e);
+            return;
+        }
+    };
+
+    println!("  ✅ Proof published: {}", proof.proof_url);
+
+    // ── Step 6: build PlatformIdentityClaim and write Aqua tree ───────────────
+    let claim = PlatformIdentityClaim {
+        signer_did: did_string.clone(),
+        provider: identity.provider.clone(),
+        provider_id: identity.provider_id.clone(),
+        display_name: identity.display_name.clone(),
+        email: identity.email.clone(),
+        proof_url: Some(proof.proof_url.clone()),
+        valid_from: None,
+        valid_until: None,
+        metadata: Some(identity.metadata.clone()),
+    };
+
+    let tree = match aquafier.create_identity_claim(None, claim, None) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("❌ Failed to create identity claim tree: {}", e);
+            return;
+        }
+    };
+
+    // ── Step 7: save to ~/.aqua/identity_<provider>.aqua.json ─────────────────
+    let out_path = identity_claim_path(provider);
+    if let Some(parent) = out_path.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!("❌ Cannot create directory {}: {}", parent.display(), e);
+            return;
+        }
+    }
+
+    match write_tree(&tree, &out_path) {
+        Ok(_) => {
+            println!();
+            println!("✅ Identity claim saved to {}", out_path.display());
+            println!("   Provider:  {} ({})", identity.provider, identity.provider_id);
+            println!("   Name:      {}", identity.display_name);
+            println!("   DID:       {}", did_string);
+            println!("   Proof URL: {}", proof.proof_url);
+            println!();
+            println!("  Use this file's Aqua hash as identity_claim_hash when publishing");
+            println!("  to the aqua-notary registry.");
+        }
+        Err(e) => eprintln!("❌ {}", e),
+    }
+}
+
+/// Returns the default path for storing an identity claim:
+/// `~/.aqua/identity_<provider>.aqua.json`
+fn identity_claim_path(provider: &str) -> PathBuf {
+    if let Ok(home) = std::env::var("HOME") {
+        PathBuf::from(home)
+            .join(".aqua")
+            .join(format!("identity_{}.aqua.json", provider))
+    } else {
+        PathBuf::from(format!("identity_{}.aqua.json", provider))
     }
 }
