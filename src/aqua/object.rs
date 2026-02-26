@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 
 use aqua_rs_sdk::primitives::RevisionLink;
 use aqua_rs_sdk::schema::templates::{
-    AccessGrant, AliasRegistration, Attestation, DomainClaim, EmailClaim, File, MultiSigner,
-    NameClaim, PhoneClaim, PluginRegistration, TemplateRegistration, TimestampPayload,
-    TrustAssertion, VendorRegistration, WalletIdentification,
+    AccessGrant, AliasRegistration, Attestation, File, MultiSigner, PlatformIdentityClaim,
+    PluginRegistration, TemplateRegistration, TimestampPayload, TrustAssertion, VendorRegistration,
+    WalletIdentification,
 };
 use aqua_rs_sdk::schema::template::BuiltInTemplate;
 use aqua_rs_sdk::Aquafier;
@@ -27,10 +27,9 @@ fn template_link_to_revision_link(bytes: &[u8; 32]) -> RevisionLink {
 fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
     match name {
         "file" => Ok(template_link_to_revision_link(&File::TEMPLATE_LINK)),
-        "domain" => Ok(template_link_to_revision_link(&DomainClaim::TEMPLATE_LINK)),
-        "email" => Ok(template_link_to_revision_link(&EmailClaim::TEMPLATE_LINK)),
-        "name" => Ok(template_link_to_revision_link(&NameClaim::TEMPLATE_LINK)),
-        "phone" => Ok(template_link_to_revision_link(&PhoneClaim::TEMPLATE_LINK)),
+        "platform-identity" => Ok(template_link_to_revision_link(
+            &PlatformIdentityClaim::TEMPLATE_LINK,
+        )),
         "attestation" => Ok(template_link_to_revision_link(&Attestation::TEMPLATE_LINK)),
         "timestamp" => Ok(template_link_to_revision_link(&TimestampPayload::TEMPLATE_LINK)),
         "multi-signer" => Ok(template_link_to_revision_link(&MultiSigner::TEMPLATE_LINK)),
@@ -56,16 +55,11 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
 }
 
 /// CLI handler for `--list-templates`.
-/// Prints all 15 built-in template names, hashes, and required/optional fields.
+/// Prints all built-in template names and hashes.
 pub(crate) fn cli_list_templates() {
-    let builtin_map = aqua_rs_sdk::builtin_templates();
-
     let templates: &[(&str, &[u8; 32])] = &[
         ("file", &File::TEMPLATE_LINK),
-        ("domain", &DomainClaim::TEMPLATE_LINK),
-        ("email", &EmailClaim::TEMPLATE_LINK),
-        ("name", &NameClaim::TEMPLATE_LINK),
-        ("phone", &PhoneClaim::TEMPLATE_LINK),
+        ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK),
         ("attestation", &Attestation::TEMPLATE_LINK),
         ("timestamp", &TimestampPayload::TEMPLATE_LINK),
         ("multi-signer", &MultiSigner::TEMPLATE_LINK),
@@ -82,39 +76,8 @@ pub(crate) fn cli_list_templates() {
     for (name, link_bytes) in templates {
         let rev = template_link_to_revision_link(link_bytes);
         println!("  {} ({})", name, rev);
-
-        if let Some(template) = builtin_map.get(*link_bytes) {
-            let schema = template.schema();
-            let required: Vec<&str> = schema
-                .get("required")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
-                .unwrap_or_default();
-
-            let all_props: Vec<&str> = schema
-                .get("properties")
-                .and_then(|v| v.as_object())
-                .map(|obj| obj.keys().map(|k| k.as_str()).collect())
-                .unwrap_or_default();
-
-            let optional: Vec<&str> = all_props
-                .iter()
-                .filter(|p| !required.contains(p))
-                .copied()
-                .collect();
-
-            if !required.is_empty() {
-                println!("    Required: {}", required.join(", "));
-            }
-            if !optional.is_empty() {
-                println!("    Optional: {}", optional.join(", "));
-            }
-            if required.is_empty() && optional.is_empty() {
-                println!("    (no payload fields)");
-            }
-        }
-        println!();
     }
+    println!();
 }
 
 /// CLI handler for `--create-object`.
