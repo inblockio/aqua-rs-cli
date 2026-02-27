@@ -128,8 +128,9 @@ pub fn save_page_data(
         original_path.with_extension(extension) // Otherwise, create a new file with the specified extension
     };
 
-    // Serialize Tree to JSON
-    match serde_json::to_string_pretty(aqua_tree) {
+    // Serialize Tree to JSON with revisions ordered from genesis to latest
+    let ordered_value = aqua_tree.to_ordered_json_value();
+    match serde_json::to_string_pretty(&ordered_value) {
         Ok(json_data) => {
             // Write JSON data to the determined file path
             fs::write(&output_path, json_data).map_err(|e| e.to_string())?;
