@@ -12,10 +12,7 @@ use aqua::object::{cli_create_object, cli_list_templates};
 use aqua::sign::cli_sign_chain;
 use aqua::verify::cli_verify_chain;
 use aqua::witness::cli_winess_chain;
-use aqua::{
-    revisions::cli_remove_revisions_from_aqua_chain,
-    revisions::cli_generate_aqua_chain,
-};
+use aqua::{revisions::cli_generate_aqua_chain, revisions::cli_remove_revisions_from_aqua_chain};
 use aqua_rs_sdk::Aquafier;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use std::{env, path::PathBuf};
@@ -44,7 +41,7 @@ COMMANDS:
    * -i or --info to show the cli version.
    * -k or --key-file to specify the file containing keys (this can also be set in the env).
    * -d or --delete remove revision from an aqua json file, by default removes the last revision.
-   * --link to link files (requires two filenames or paths as parameter).
+   * --link to link files (requires parent + one or more child filenames/paths).
    * --previous-hash to target a specific revision instead of the latest (enables tree/DAG structures).
    * --create-object to create a genesis object revision with a custom template and JSON payload.
        Requires --template-name <NAME> or --template-hash <HASH>, and --payload <PATH_OR_JSON>.
@@ -59,7 +56,8 @@ EXAMPLES:
     aqua-cli --file image.png --verbose
     aqua-cli -f document.json --output report.json
 
-    aqua-cli file.json --link file2.json
+    aqua-cli --link parent.aqua.json child.aqua.json
+    aqua-cli --link parent.aqua.json child1.aqua.json child2.aqua.json
 
     # Sign targeting a specific revision (enables tree/DAG branching):
     aqua-cli -s chain.json --sign-type cli -k keys.json --previous-hash 0x<revision_hash>
@@ -208,9 +206,9 @@ pub fn parse_args() -> Result<CliArgs, String> {
             Arg::new("link")
             .long("link")
             .action(ArgAction::Set)
-            .num_args(2) // Accept exactly two arguments for linking
+            .num_args(2..) // Accept parent + one or more children
             .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
-            .help("Link two files (requires two filenames or paths as parameters)"),
+            .help("Link files: first arg is parent, rest are children linked in one anchor revision"),
         )
         .arg(
             Arg::new("previous-hash")
@@ -270,13 +268,16 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .get_one::<String>("authenticate")
         .map(|p| PathBuf::from(p));
     let sign = matches.get_one::<String>("sign").map(|p| PathBuf::from(p));
-    let sign_type = matches.get_one::<String>("sign-type").cloned().map(|s| match s.as_str() {
-        "cli" => SignType::Cli,
-        "metamask" => SignType::Metamask,
-        "did" => SignType::Did,
-        "p256" => SignType::P256,
-        _ => unreachable!(),
-    });
+    let sign_type = matches
+        .get_one::<String>("sign-type")
+        .cloned()
+        .map(|s| match s.as_str() {
+            "cli" => SignType::Cli,
+            "metamask" => SignType::Metamask,
+            "did" => SignType::Did,
+            "p256" => SignType::P256,
+            _ => unreachable!(),
+        });
     let witness = matches
         .get_one::<String>("witness")
         .map(|p| PathBuf::from(p));
@@ -298,7 +299,9 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let keys_file = matches
         .get_one::<String>("keys_file")
         .map(|p| PathBuf::from(p));
-    let delete = matches.get_one::<String>("delete").map(|p| PathBuf::from(p));
+    let delete = matches
+        .get_one::<String>("delete")
+        .map(|p| PathBuf::from(p));
     let link = matches
         .get_many::<String>("link")
         .map(|vals| vals.map(PathBuf::from).collect());
@@ -439,33 +442,46 @@ async fn main() {
         }
         (_, Some(sign_path), Some(sign_type), _, _, _, _, _) => {
             println!("Signing file: {:?} using {:?}", sign_path, sign_type);
-            cli_sign_chain(args.clone(), &aquafier, sign_path.to_path_buf(), sign_type.clone(), keys_file).await;
+            cli_sign_chain(
+                args.clone(),
+                &aquafier,
+                sign_path.to_path_buf(),
+                sign_type.clone(),
+                keys_file,
+            )
+            .await;
         }
         (_, _, _, Some(witness_path), Some(witness_type), _, _, _) => {
-            println!("Witnessing file: {:?} using {:?}", witness_path, witness_type);
-            cli_winess_chain(args.clone(), &aquafier, witness_path.to_path_buf(), witness_type.clone(), keys_file).await;
+            println!(
+                "Witnessing file: {:?} using {:?}",
+                witness_path, witness_type
+            );
+            cli_winess_chain(
+                args.clone(),
+                &aquafier,
+                witness_path.to_path_buf(),
+                witness_type.clone(),
+                keys_file,
+            )
+            .await;
         }
         (_, _, _, _, _, Some(file_path), _, _) => {
             println!("Generating aqua json file from: {:?}", file_path);
             cli_generate_aqua_chain(args.clone(), &aquafier);
         }
         (_, _, _, _, _, _, Some(link_paths), _) => {
-            if link_paths.len() != 2 {
-                eprintln!("Error: Linking requires exactly two file paths.");
-                std::process::exit(1);
-            }
-            let file1 = &link_paths[0];
-            let file2 = &link_paths[1];
-            println!("Linking files: {:?} and {:?}", file1, file2);
-            cli_link_chain(args.clone(), &aquafier, file1.clone(), file2.clone());
+            let parent = link_paths[0].clone();
+            let children: Vec<PathBuf> = link_paths[1..].to_vec();
+            println!(
+                "Linking {} child chain(s) into parent {:?}",
+                children.len(),
+                parent
+            );
+            cli_link_chain(args.clone(), &aquafier, parent, children);
         }
         (_, _, _, _, _, _, _, Some(file_path)) => {
             println!("Deleting last revision");
-            cli_remove_revisions_from_aqua_chain(
-                args.clone(),
-                &aquafier,
-                file_path.to_path_buf(),
-            );
+            cli_remove_revisions_from_aqua_chain(args.clone(), &aquafier, file_path.to_path_buf());
         }
         _ => {
             println!("Error: Unsupported operation or missing parameters (if witness or signing ensure to pass in witness_type or sign_type)");

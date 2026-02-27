@@ -4,7 +4,7 @@
 use std::{fs, path::PathBuf};
 
 use aqua_rs_sdk::schema::tree::Tree;
-use aqua_rs_sdk::schema::{AquaTreeWrapper, FileData};
+use aqua_rs_sdk::schema::{AnyRevision, AquaTreeWrapper, FileData};
 use aqua_rs_sdk::Aquafier;
 
 use crate::{
@@ -43,36 +43,49 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
                 }
             }
 
-            // Load linked chains: file_index entries ending in .aqua.json
-            // are external chain files referenced by anchor
-            // link_verification_hashes. Load them so the verifier can
-            // resolve cross-tree links.
+            // Load linked chains: collect all hashes referenced by anchor
+            // link_verification_hashes, look them up in file_index to get the
+            // file name, derive the .aqua.json path, and load the chain.
+            let mut link_hashes = std::collections::HashSet::new();
+            for revision in tree.revisions.values() {
+                if let AnyRevision::Anchor(anchor) = revision {
+                    for lh in anchor.link_verification_hashes() {
+                        link_hashes.insert(lh.clone());
+                    }
+                }
+            }
+
             let mut linked_trees: Vec<AquaTreeWrapper> = Vec::new();
-            for (_hash, name) in &tree.file_index {
-                if name.ends_with(".aqua.json") {
-                    let chain_path = folder_path.join(name);
-                    if let Ok(chain_bytes) = fs::read_to_string(&chain_path) {
-                        if let Ok(linked_tree) = serde_json::from_str::<Tree>(&chain_bytes) {
-                            // Load the linked tree's content file for verification
-                            let linked_file_obj =
-                                linked_tree
-                                    .get_main_file_name()
-                                    .and_then(|linked_file_name| {
-                                        let linked_file_path = folder_path.join(&linked_file_name);
-                                        fs::read(&linked_file_path).ok().map(|content| {
-                                            FileData::new(
-                                                linked_file_name,
-                                                content,
-                                                linked_file_path,
-                                            )
-                                        })
-                                    });
-                            linked_trees.push(AquaTreeWrapper::new(
-                                linked_tree,
-                                linked_file_obj,
-                                None,
-                            ));
-                        }
+            for (hash, name) in &tree.file_index {
+                if !link_hashes.contains(hash) {
+                    continue;
+                }
+                let chain_name = std::path::Path::new(name)
+                    .with_extension("aqua.json")
+                    .to_string_lossy()
+                    .into_owned();
+                let chain_path = folder_path.join(&chain_name);
+                if let Ok(chain_bytes) = fs::read_to_string(&chain_path) {
+                    if let Ok(linked_tree) = serde_json::from_str::<Tree>(&chain_bytes) {
+                        // Load the linked tree's content file for verification
+                        let linked_file_obj =
+                            linked_tree
+                                .get_main_file_name()
+                                .and_then(|linked_file_name| {
+                                    let linked_file_path = folder_path.join(&linked_file_name);
+                                    fs::read(&linked_file_path).ok().map(|content| {
+                                        FileData::new(
+                                            linked_file_name,
+                                            content,
+                                            linked_file_path,
+                                        )
+                                    })
+                                });
+                        linked_trees.push(AquaTreeWrapper::new(
+                            linked_tree,
+                            linked_file_obj,
+                            None,
+                        ));
                     }
                 }
             }

@@ -637,15 +637,15 @@ fn link_and_verify_resolves_cross_tree_references() {
         "link should succeed"
     );
 
-    // The linked chain's file_index should contain the .aqua.json reference
+    // The linked chain's file_index should reference the child's actual file name
     let tree = read_tree(&chain1);
     let file_index = tree["file_index"].as_object().unwrap();
-    let has_aqua_json_ref = file_index
+    let has_child_ref = file_index
         .values()
-        .any(|v| v.as_str().map_or(false, |s| s.ends_with(".aqua.json")));
+        .any(|v| v.as_str().map_or(false, |s| s == "2.txt"));
     assert!(
-        has_aqua_json_ref,
-        "file_index should contain .aqua.json reference for the linked chain"
+        has_child_ref,
+        "file_index should contain the linked child's file name"
     );
 
     // Verify the linked chain — the verifier should auto-load the linked
@@ -712,6 +712,104 @@ fn link_produces_valid_structure() {
         !link_anchors.is_empty(),
         "linked chain should have a chained anchor with link_verification_hashes"
     );
+}
+
+#[test]
+fn link_multiple_chains() {
+    let tmp = TempDir::new().unwrap();
+
+    // Copy three fixtures
+    fs::copy(test_files_dir().join("1.txt"), tmp.path().join("1.txt")).unwrap();
+    fs::copy(test_files_dir().join("2.txt"), tmp.path().join("2.txt")).unwrap();
+    fs::copy(
+        test_files_dir().join("img.jpeg"),
+        tmp.path().join("img.jpeg"),
+    )
+    .unwrap();
+
+    // Generate all three chains
+    for fixture in &["1.txt", "2.txt", "img.jpeg"] {
+        let gen = cli()
+            .arg("-f")
+            .arg(tmp.path().join(fixture))
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        assert!(
+            gen.status.success(),
+            "genesis for {} failed: {}",
+            fixture,
+            String::from_utf8_lossy(&gen.stderr)
+        );
+    }
+
+    let parent = tmp.path().join("1.aqua.json");
+    let child1 = tmp.path().join("2.aqua.json");
+    let child2 = tmp.path().join("img.aqua.json");
+    let count_before = revision_count(&read_tree(&parent));
+
+    // Link both children into parent in a single command
+    let output = cli()
+        .arg("--link")
+        .arg(&parent)
+        .arg(&child1)
+        .arg(&child2)
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Successfully linked"),
+        "multilink should succeed: {}",
+        stdout
+    );
+
+    let tree = read_tree(&parent);
+    let count_after = revision_count(&tree);
+    assert!(
+        count_after > count_before,
+        "linked chain should have more revisions: {} -> {}",
+        count_before,
+        count_after
+    );
+
+    // The new anchor should have link_verification_hashes with 2 entries
+    let revisions = tree["revisions"].as_object().unwrap();
+    let link_anchor = revisions
+        .values()
+        .find(|r| {
+            r.get("revision_type").and_then(|v| v.as_str()) == Some("anchor")
+                && r.get("link_verification_hashes").is_some()
+                && r.get("previous_revision").is_some()
+        })
+        .expect("should have a chained anchor with link_verification_hashes");
+
+    let link_hashes = link_anchor["link_verification_hashes"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        link_hashes.len(),
+        2,
+        "anchor should have 2 link_verification_hashes entries, got {}",
+        link_hashes.len()
+    );
+
+    // file_index should contain actual file name references for both children
+    let file_index = tree["file_index"].as_object().unwrap();
+    let child_refs: Vec<_> = file_index
+        .values()
+        .filter_map(|v| v.as_str())
+        .filter(|s| *s == "2.txt" || *s == "img.jpeg")
+        .collect();
+    assert!(
+        child_refs.len() >= 2,
+        "file_index should have entries for both linked children, got {}: {:?}",
+        child_refs.len(),
+        child_refs
+    );
+
+    // Verify the linked chain passes full verification
+    assert_verify_ok(&parent);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
