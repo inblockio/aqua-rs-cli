@@ -37,10 +37,11 @@
 //!    WASM state output when an explicit trust store is configured on `Aquafier`.
 //!    Without `.trust_store(...)` on the builder, `wasm_outputs` is always empty.
 //!
-//! 2. **Sign before link for attestations**: The attester signature must be added to
-//!    the attestation tree BEFORE calling `link_aqua_tree`.  Signing after linking
-//!    places the signature after the anchor, where the attestation WASM does not
-//!    find it (the branch scan at the object revision sees only the pre-link signature).
+//! 2. **Genesis anchor carries claim dependency**: The attestation tree's genesis
+//!    anchor holds `link_verification_hashes: [claim_sig_hash]` — the structural
+//!    import of the signed claim.  No trailing anchor is appended after signing.
+//!    The claim must be built and signed *before* the attestation tree is created,
+//!    so the claim signature hash is available for the genesis anchor.
 //!
 //! 3. **WASM trigger condition**: An empty-but-configured trust store
 //!    (`DefaultTrustStore::new(HashMap::new())`) still triggers WASM execution.
@@ -54,6 +55,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use aqua_rs_sdk::{
+    primitives::RevisionLink,
     schema::{AquaTreeWrapper, tree::Tree},
     Aquafier, DefaultTrustStore, VerificationResult,
 };
@@ -191,29 +193,26 @@ pub async fn c3_untrusted() -> ScenarioResult {
     // Empty trust store — attester NOT in trust store.
     let aq = aquafier_with_empty_trust();
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (claim build failed)", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (claim build failed)", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", None, None) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (attest build failed)", expected, e),
     };
-    // Sign BEFORE linking (signature must be a direct branch of the attestation object).
     let signed = match builders::sign_ed25519(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (attest sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "PlatformIdentityClaim — untrusted (two-tree: signed attestation, attester not in trust store)", expected, linked, claim_tree, aq, vec![
+    verify_attestation(id, "PlatformIdentityClaim — untrusted (two-tree: signed attestation, attester not in trust store)", expected, signed, claim_tree, aq, vec![
         "Claim trust states use the two-tree model: verify attestation with claim as linked tree",
-        "Sign attestation BEFORE link_aqua_tree; signing after produces 'unsigned'",
+        "Genesis anchor carries claim_sig_hash; no trailing link anchor needed",
     ]).await
 }
 
@@ -230,13 +229,15 @@ pub async fn c4_attested() -> ScenarioResult {
     trust.insert(attester_did.clone(), 2u8);
     let aq = aquafier_with_trust(trust);
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — attested (claim build failed)", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "PlatformIdentityClaim — attested (claim build failed)", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", None, None) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — attested (attest build failed)", expected, e),
     };
@@ -244,12 +245,8 @@ pub async fn c4_attested() -> ScenarioResult {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — attested (attest sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — attested (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "PlatformIdentityClaim — attested (two-tree: trusted attestation, level 2)", expected, linked, claim_tree, aq, vec![
+    verify_attestation(id, "PlatformIdentityClaim — attested (two-tree: trusted attestation, level 2)", expected, signed, claim_tree, aq, vec![
         "Claim trust states use the two-tree model: verify attestation with claim as linked tree",
     ]).await
 }
@@ -265,13 +262,15 @@ pub async fn c5_expired() -> ScenarioResult {
     trust.insert(attester_did.clone(), 2u8);
     let aq = aquafier_with_trust(trust);
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — expired (claim build failed)", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "PlatformIdentityClaim — expired (claim build failed)", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", None, Some(1000)) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, Some(1000),
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — expired (attest build failed)", expected, e),
     };
@@ -279,12 +278,8 @@ pub async fn c5_expired() -> ScenarioResult {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — expired (attest sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — expired (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "PlatformIdentityClaim — expired (two-tree: attestation valid_until=1000)", expected, linked, claim_tree, aq, vec![]).await
+    verify_attestation(id, "PlatformIdentityClaim — expired (two-tree: attestation valid_until=1000)", expected, signed, claim_tree, aq, vec![]).await
 }
 
 /// C6 — `not_yet_valid`: two-tree model — trusted attestation with `valid_from=9999999999` (future).
@@ -298,13 +293,15 @@ pub async fn c6_not_yet_valid() -> ScenarioResult {
     trust.insert(attester_did.clone(), 2u8);
     let aq = aquafier_with_trust(trust);
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (claim build failed)", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (claim build failed)", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", Some(9_999_999_999), None) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), Some(9_999_999_999), None,
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (attest build failed)", expected, e),
     };
@@ -312,12 +309,8 @@ pub async fn c6_not_yet_valid() -> ScenarioResult {
         Ok(t) => t,
         Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (attest sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "PlatformIdentityClaim — not_yet_valid (two-tree: attestation valid_from=9999999999)", expected, linked, claim_tree, aq, vec![]).await
+    verify_attestation(id, "PlatformIdentityClaim — not_yet_valid (two-tree: attestation valid_from=9999999999)", expected, signed, claim_tree, aq, vec![]).await
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -379,22 +372,21 @@ pub async fn a2_unsigned() -> ScenarioResult {
     let (_, attester_did) = keygen::generate_p256();
     let aq = aquafier_with_empty_trust();
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — unsigned", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "Attestation — unsigned", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", None, None) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — unsigned (attest build failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, attest_tree, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — unsigned (link failed)", expected, e),
-    };
+    // No signing — attestation is unsigned.
 
-    verify_attestation(id, "Attestation — unsigned (linked to claim, no attester sig)", expected, linked, claim_tree, aq, vec![]).await
+    verify_attestation(id, "Attestation — unsigned (genesis anchor → claim sig, no attester sig)", expected, attest_tree, claim_tree, aq, vec![]).await
 }
 
 /// A3 — `untrusted`: attester signed but NOT in trust store.
@@ -412,28 +404,25 @@ pub async fn a3_untrusted() -> ScenarioResult {
     // Empty trust store — attester is not in it.
     let aq = aquafier_with_empty_trust();
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — untrusted", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "Attestation — untrusted", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", None, None) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — untrusted (attest build failed)", expected, e),
     };
-    // Sign BEFORE linking so signature is directly on the attestation object.
     let signed = match builders::sign_ed25519(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — untrusted (sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — untrusted (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "Attestation — untrusted (sign before link, not in trust store)", expected, linked, claim_tree, aq, vec![
-        "Sign attestation BEFORE link_aqua_tree; signing after produces 'unsigned' (signature trails anchor)",
+    verify_attestation(id, "Attestation — untrusted (genesis anchor → claim sig, attester not in trust store)", expected, signed, claim_tree, aq, vec![
+        "Genesis anchor carries claim_sig_hash; no trailing anchor needed",
     ]).await
 }
 
@@ -449,28 +438,24 @@ pub async fn a4_attested() -> ScenarioResult {
     trust.insert(attester_did.clone(), 2u8);
     let aq = aquafier_with_trust(trust);
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — attested", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "Attestation — attested", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", None, None) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — attested (attest build failed)", expected, e),
     };
-    // Sign BEFORE linking so signature is directly on the attestation object.
     let signed = match builders::sign_p256(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — attested (sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — attested (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "Attestation — attested (sign before link, attester in trust store level 2)", expected, linked, claim_tree, aq, vec![
-        "Sign attestation BEFORE link_aqua_tree; signing after produces 'unsigned'",
+    verify_attestation(id, "Attestation — attested (genesis anchor → claim sig, attester in trust store level 2)", expected, signed, claim_tree, aq, vec![
         "Aquafier is immutable after build; separate instances required for different trust stores",
     ]).await
 }
@@ -486,27 +471,24 @@ pub async fn a5_expired() -> ScenarioResult {
     trust.insert(attester_did.clone(), 2u8);
     let aq = aquafier_with_trust(trust);
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — expired", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "Attestation — expired", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", None, Some(1000)) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, Some(1000),
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — expired (attest build failed)", expected, e),
     };
-    // Sign BEFORE linking.
     let signed = match builders::sign_ed25519(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — expired (sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — expired (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "Attestation — expired (sign before link, valid_until=1000)", expected, linked, claim_tree, aq, vec![]).await
+    verify_attestation(id, "Attestation — expired (genesis anchor → claim sig, valid_until=1000)", expected, signed, claim_tree, aq, vec![]).await
 }
 
 /// A6 — `not_yet_valid`: attested (sign before link) but valid_from is far in the future.
@@ -520,27 +502,24 @@ pub async fn a6_not_yet_valid() -> ScenarioResult {
     trust.insert(attester_did.clone(), 2u8);
     let aq = aquafier_with_trust(trust);
 
-    let claim_tree = match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — not_yet_valid", expected, e),
-    };
-    let claim_for_link = claim_tree.clone();
+    let (claim_tree, claim_obj_hash, claim_sig_hash) =
+        match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
+            Ok(t) => t,
+            Err(e) => return err_result(id, "Attestation — not_yet_valid", expected, e),
+        };
 
-    let attest_tree = match builders::build_attestation_tree(&aq, &attester_did, "identity-attestation", Some(9_999_999_999), None) {
+    let attest_tree = match builders::build_attestation_tree(
+        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), Some(9_999_999_999), None,
+    ) {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — not_yet_valid (attest build failed)", expected, e),
     };
-    // Sign BEFORE linking.
     let signed = match builders::sign_p256(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — not_yet_valid (sign failed)", expected, e),
     };
-    let linked = match builders::link_attestation_to_claim(&aq, signed, claim_for_link) {
-        Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — not_yet_valid (link failed)", expected, e),
-    };
 
-    verify_attestation(id, "Attestation — not_yet_valid (sign before link, valid_from=9999999999)", expected, linked, claim_tree, aq, vec![]).await
+    verify_attestation(id, "Attestation — not_yet_valid (genesis anchor → claim sig, valid_from=9999999999)", expected, signed, claim_tree, aq, vec![]).await
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -562,18 +541,30 @@ fn err_result(
     }
 }
 
-/// Build a claim tree signed by the claimer (P256).
+/// Build a self-signed claim tree and return `(signed_tree, obj_hash, sig_hash)`.
+///
+/// `obj_hash` is the claim object revision hash (captured before signing) — used
+/// as the informational string reference in the attestation payload's `context`.
+/// `sig_hash` is the claim signature revision hash — used as the genesis anchor
+/// link in the paired attestation tree (structural cross-tree dependency).
 async fn build_self_signed_claim(
     aq: &Aquafier,
     claimer_did: &str,
     claimer_priv: &[u8],
     valid_from: Option<u64>,
     valid_until: Option<u64>,
-) -> Result<aqua_rs_sdk::schema::tree::Tree, aqua_rs_sdk::primitives::MethodError> {
-    let tree = builders::build_claim_tree(aq, claimer_did, valid_from, valid_until)?;
-    // Sign with Ed25519 if claimer_priv is 32 bytes for Ed25519, otherwise P256.
-    // We use Ed25519 for simplicity (callers pick the key type).
-    builders::sign_ed25519(aq, tree, claimer_priv).await
+) -> Result<(Tree, RevisionLink, RevisionLink), aqua_rs_sdk::primitives::MethodError> {
+    let unsigned = builders::build_claim_tree(aq, claimer_did, valid_from, valid_until)?;
+    let obj_hash = unsigned
+        .get_latest_revision_link()
+        .ok_or_else(|| aqua_rs_sdk::primitives::MethodError::Simple("empty claim tree".into()))?;
+    // Always sign with Ed25519 for simplicity (WASM checks the attestation's
+    // signature, not the claim's, for trust-level states C3-C6, A2-A6).
+    let signed = builders::sign_ed25519(aq, unsigned, claimer_priv).await?;
+    let sig_hash = signed
+        .get_latest_revision_link()
+        .ok_or_else(|| aqua_rs_sdk::primitives::MethodError::Simple("empty signed claim tree".into()))?;
+    Ok((signed, obj_hash, sig_hash))
 }
 
 /// Verify a claim tree and build a `ScenarioResult`.

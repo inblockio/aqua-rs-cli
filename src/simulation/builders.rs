@@ -6,11 +6,13 @@
 //! Deliberately uses the lowest-level public SDK API to surface friction points.
 //! Friction points are documented with `// FRICTION:` comments.
 
+use std::collections::BTreeMap;
+
 use aqua_rs_sdk::{
     schema::{
         template::BuiltInTemplate,
         templates::{Attestation, PlatformIdentityClaim, TrustAssertion},
-        Anchor, AnyRevision,
+        Anchor, AnyRevision, Object,
         AquaTreeWrapper, SigningCredentials,
         tree::Tree,
     },
@@ -90,90 +92,109 @@ pub async fn sign_p256(
     Ok(op.aqua_tree)
 }
 
-/// Build an `Attestation` genesis tree (unsigned, no cross-tree link yet).
+/// Build an `Attestation` genesis tree (unsigned, not yet linked to a signer).
 ///
-/// # FRICTION
-/// `Attestation` (called `Claim` in attestation.rs) requires a `context` field
-/// but the spec doesn't define whether this should be the claim hash or a string.
-/// No SDK API documents the expected `context` format for WASM verification.
+/// The genesis anchor carries `claim_sig_hash` as its sole
+/// `link_verification_hashes` entry — the structural import declaring that
+/// this attestation depends on that specific signed claim revision.
+///
+/// `claim_obj_hash` is recorded in the payload `context` field as an
+/// informational string reference to the claim *object* revision (not a
+/// structural link).  The object hash identifies *which* claim is being
+/// attested; the signature hash (in the anchor) enforces that the claim
+/// was already signed before this attestation could be constructed.
+///
+/// This produces a single-anchor tree:
+/// ```text
+/// Template (genesis)
+/// Genesis Anchor (genesis, link_verification_hashes=[claim_sig_hash])
+/// Attestation Object (prev=anchor)
+/// ```
 pub fn build_attestation_tree(
-    aquafier: &Aquafier,
+    _aquafier: &Aquafier,
     attester_did: &str,
-    context: &str,
+    claim_sig_hash: &RevisionLink,
+    claim_obj_hash: &str,
     valid_from: Option<u64>,
     valid_until: Option<u64>,
 ) -> Result<Tree, aqua_rs_sdk::primitives::MethodError> {
     let template_hash = template_link(Attestation::TEMPLATE_LINK);
+
+    // Payload: context = claim object hash (informational ref), signer_did = attester.
     let attest = Attestation {
-        context: context.to_string(),
+        context: claim_obj_hash.to_string(),
         signer_did: attester_did.to_string(),
         valid_from,
         valid_until,
     };
     let payload = serde_json::to_value(&attest)
         .map_err(|e| aqua_rs_sdk::primitives::MethodError::Simple(e.to_string()))?;
-    aquafier.create_object(template_hash, None, payload, Some(Method::Scalar))
+
+    let mut revisions: BTreeMap<RevisionLink, AnyRevision> = BTreeMap::new();
+    let mut file_index: BTreeMap<RevisionLink, String> = BTreeMap::new();
+
+    // 1. Template revision — self-describing.
+    let template = Aquafier::builtin_templates()
+        .get(&Attestation::TEMPLATE_LINK)
+        .ok_or_else(|| aqua_rs_sdk::primitives::MethodError::Simple(
+            "attestation built-in template not found".into(),
+        ))?
+        .clone();
+    revisions.insert(template_hash.clone(), AnyRevision::Template(template));
+    file_index.insert(
+        template_hash.clone(),
+        format!("template_{}", template_hash.to_string().chars().take(8).collect::<String>()),
+    );
+
+    // 2. Genesis anchor: structural import of the claim's signature revision.
+    //    link_verification_hashes = [claim_sig_hash] — the cross-tree dependency.
+    let mut anchor = Anchor::genesis(
+        Method::Scalar,
+        HashType::Sha3_256,
+        vec![claim_sig_hash.clone()],
+    );
+    let anchor_hash = anchor.calculate_link()?;
+    anchor.populate_leaves()?;
+    file_index.insert(
+        anchor_hash.clone(),
+        format!("anchor_{}", anchor_hash.to_string().chars().take(8).collect::<String>()),
+    );
+    revisions.insert(anchor_hash.clone(), AnyRevision::Anchor(anchor));
+
+    // 3. Attestation object chained from the genesis anchor.
+    let mut object = Object::new(
+        anchor_hash,
+        template_hash,
+        Method::Scalar,
+        HashType::Sha3_256,
+        payload,
+    );
+    let obj_hash = object.calculate_link()?;
+    object.populate_leaves()?;
+    file_index.insert(
+        obj_hash.clone(),
+        format!("object_{}", obj_hash.to_string().chars().take(8).collect::<String>()),
+    );
+    revisions.insert(obj_hash, AnyRevision::Object(object));
+
+    Ok(Tree { revisions, file_index })
 }
 
-/// Link an attestation tree to a claim tree.
+/// Build a "headless" attestation tree: genesis anchor links to a nonexistent
+/// hash, so the anchor cannot be resolved (A1 scenario).
 ///
-/// Uses `Aquafier::link_aqua_tree()` to append an Anchor revision in the
-/// attestation tree that references the claim tree's latest revision hash.
-pub fn link_attestation_to_claim(
-    aquafier: &Aquafier,
-    attest_tree: Tree,
-    claim_tree: Tree,
-) -> Result<Tree, aqua_rs_sdk::primitives::MethodError> {
-    let attest_wrapper = AquaTreeWrapper::new(attest_tree, None, None);
-    let claim_wrapper = AquaTreeWrapper::new(claim_tree, None, None);
-    aquafier.link_aqua_tree(attest_wrapper, vec![claim_wrapper], None)
-}
-
-/// Build a "headless" attestation tree: an attestation whose anchor links to
-/// a nonexistent hash, so the link cannot be resolved (A1 scenario).
-///
-/// # FRICTION
-/// No public SDK API for "creating an anchor that references a hash not in scope."
-/// We must drop to `schema::Anchor` + `verification::Linkable` directly and
-/// manually mutate `Tree::revisions`.  This exposes internal representation
-/// details that ideally should be abstracted by an SDK builder.
+/// Under the correct single-anchor model this is simply `build_attestation_tree`
+/// with a zero `claim_sig_hash` — structurally identical to any other
+/// attestation, but the anchor target does not exist in any tree.
 pub fn build_headless_attestation_tree(
     aquafier: &Aquafier,
     attester_did: &str,
 ) -> Result<Tree, aqua_rs_sdk::primitives::MethodError> {
-    // 1. Build the attestation object tree normally.
-    let attest_tree = build_attestation_tree(aquafier, attester_did, "headless-context", None, None)?;
-
-    // 2. Get the latest (object) revision hash to chain the anchor from.
-    let latest = attest_tree
-        .get_latest_revision_link()
-        .ok_or_else(|| aqua_rs_sdk::primitives::MethodError::Simple("empty attestation tree".into()))?;
-
-    // 3. Create an anchor that links to a nonexistent hash.
-    //    The fake hash is 32 zero bytes — guaranteed not to exist in any tree.
-    //
     // FRICTION: `RevisionLink::new()` is `pub(crate)`, so we must parse from hex.
-    let fake_hash: RevisionLink = format!("0x{}", "00".repeat(32))
+    let fake_sig_hash: RevisionLink = format!("0x{}", "00".repeat(32))
         .parse()
         .expect("zero hash is valid hex");
-
-    let headless_anchor = Anchor::new(
-        latest,
-        Method::Scalar,
-        HashType::Sha3_256,
-        vec![fake_hash],
-    );
-    let anchor_hash = headless_anchor.calculate_link()?;
-    // populate_leaves is only needed for Method::Tree; skip for Scalar.
-
-    // 4. Append the anchor to the tree.
-    let mut revisions = attest_tree.revisions.clone();
-    let mut file_index = attest_tree.file_index.clone();
-    let anchor_name = format!("anchor_{}", &anchor_hash.to_string()[2..10]);
-    revisions.insert(anchor_hash.clone(), AnyRevision::Anchor(headless_anchor));
-    file_index.insert(anchor_hash, anchor_name);
-
-    Ok(Tree { revisions, file_index })
+    build_attestation_tree(aquafier, attester_did, &fake_sig_hash, "headless", None, None)
 }
 
 /// Build a `TrustAssertion` tree asserting `trust_level` for `subject_did`.
