@@ -3,10 +3,13 @@
 
 pub mod aqua;
 pub mod models;
+#[cfg(feature = "simulation")]
+pub mod simulation;
 pub mod tests;
 pub mod utils;
 
 use crate::models::{CliArgs, SignType, WitnessType};
+use aqua::forest::cli_ephemeral_forest;
 use aqua::link::cli_link_chain;
 use aqua::object::{cli_create_object, cli_list_templates};
 use aqua::sign::cli_sign_chain;
@@ -46,6 +49,10 @@ COMMANDS:
    * --create-object to create a genesis object revision with a custom template and JSON payload.
        Requires --template-name <NAME> or --template-hash <HASH>, and --payload <PATH_OR_JSON>.
    * --list-templates to list all available built-in templates with their hashes.
+   * --forest to ingest one or more .aqua.json files into an ephemeral in-memory forest
+       and display the combined verified state: node counts, genesis trees, tip revisions,
+       and unresolved L3 cross-tree dependencies. Accepts one or more file paths.
+       Use -v (--verbose) to print per-node details.
 
 EXAMPLES:
     aqua-cli -a chain.json
@@ -259,13 +266,33 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .action(ArgAction::SetTrue)
                 .help("Generate a single-revision genesis (no anchor or template revisions). Only used with -f/--file"),
         )
+        .arg(
+            Arg::new("forest")
+                .long("forest")
+                .action(ArgAction::Set)
+                .num_args(1..)
+                .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
+                .help("Ingest one or more .aqua.json files into an ephemeral in-memory forest and display the combined verified state"),
+        )
+        .arg(
+            Arg::new("simulate")
+                .long("simulate")
+                .action(ArgAction::SetTrue)
+                .help("Run the identity simulation suite — exercises all 12 PlatformIdentityClaim/Attestation WASM states (requires --features simulation)"),
+        )
+        .arg(
+            Arg::new("keep")
+                .long("keep")
+                .action(ArgAction::SetTrue)
+                .help("Keep simulation tree files on disk for inspection (use with --simulate)"),
+        )
         .group(
             ArgGroup::new("template")
                 .args(["template-hash", "template-name"])
         )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate"])
                 .required(true),
         )
         .get_matches();
@@ -319,6 +346,11 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let payload = matches.get_one::<String>("payload").cloned();
     let list_templates = matches.get_flag("list-templates");
     let minimal = matches.get_flag("minimal");
+    let forest_files = matches
+        .get_many::<String>("forest")
+        .map(|vals| vals.map(PathBuf::from).collect());
+    let simulate = matches.get_flag("simulate");
+    let keep = matches.get_flag("keep");
 
     Ok(CliArgs {
         authenticate,
@@ -341,6 +373,9 @@ pub fn parse_args() -> Result<CliArgs, String> {
         payload,
         list_templates,
         minimal,
+        forest_files,
+        simulate,
+        keep,
     })
 }
 
@@ -376,6 +411,19 @@ async fn main() {
         return;
     }
 
+    if args.simulate {
+        #[cfg(feature = "simulation")]
+        {
+            simulation::run_simulation(args.verbose, args.keep).await;
+            return;
+        }
+        #[cfg(not(feature = "simulation"))]
+        {
+            eprintln!("Error: --simulate requires building with `cargo build --features simulation`");
+            std::process::exit(1);
+        }
+    }
+
     if args.authenticate.is_none()
         && args.sign.is_none()
         && args.witness.is_none()
@@ -383,6 +431,8 @@ async fn main() {
         && args.link.is_none()
         && args.delete.is_none()
         && !args.create_object
+        && args.forest_files.is_none()
+        && !args.simulate
     {
         println!("{}", BASE_LONG_ABOUT);
         return;
@@ -431,6 +481,11 @@ async fn main() {
     if args.create_object {
         println!("Creating genesis object revision");
         cli_create_object(args.clone(), &aquafier);
+        return;
+    }
+
+    if let Some(forest_files) = args.forest_files.clone() {
+        cli_ephemeral_forest(args.clone(), &aquafier, forest_files).await;
         return;
     }
 

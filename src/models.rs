@@ -40,4 +40,7 @@ pub struct CliArgs {
     pub payload: Option<String>,
     pub list_templates: bool,
     pub minimal: bool,
+    pub forest_files: Option<Vec<PathBuf>>,
+    pub simulate: bool,
+    pub keep: bool,
 }

@@ -706,10 +706,13 @@ dependencies = [
  "clap",
  "console",
  "dotenv",
+ "ed25519-dalek",
  "env_logger",
  "getrandom 0.3.4",
  "hex",
  "once_cell",
+ "p256",
+ "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
@@ -723,11 +726,12 @@ dependencies = [
 
 [[package]]
 name = "aqua-rs-sdk"
-version = "1.2.0"
+version = "4.0.0"
 dependencies = [
  "alloy",
  "async-trait",
  "base64 0.21.7",
+ "bytes",
  "chrono",
  "der",
  "ed25519-dalek",
@@ -746,6 +750,7 @@ dependencies = [
  "pkcs8",
  "rand 0.8.5",
  "rand_core 0.6.4",
+ "regex",
  "reqwest 0.11.27",
  "rustls-pki-types",
  "serde",
