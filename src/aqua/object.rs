@@ -54,30 +54,75 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
     }
 }
 
+/// Extract mandatory and optional field names from a template JSON string.
+/// Returns `(mandatory, optional)` vectors of field names.
+fn extract_template_fields(json_str: &str) -> (Vec<String>, Vec<String>) {
+    let parsed: serde_json::Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(_) => return (vec![], vec![]),
+    };
+
+    let schema = match parsed.get("schema") {
+        Some(s) => s,
+        None => return (vec![], vec![]),
+    };
+
+    let properties: Vec<String> = schema
+        .get("properties")
+        .and_then(|p| p.as_object())
+        .map(|obj| obj.keys().cloned().collect())
+        .unwrap_or_default();
+
+    let required: Vec<String> = schema
+        .get("required")
+        .and_then(|r| r.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let mut mandatory = Vec::new();
+    let mut optional = Vec::new();
+    for field in &properties {
+        if required.contains(field) {
+            mandatory.push(field.clone());
+        } else {
+            optional.push(field.clone());
+        }
+    }
+    (mandatory, optional)
+}
+
 /// CLI handler for `--list-templates`.
-/// Prints all built-in template names and hashes.
+/// Prints all built-in template names, hashes, and their fields.
 pub(crate) fn cli_list_templates() {
-    let templates: &[(&str, &[u8; 32])] = &[
-        ("file", &File::TEMPLATE_LINK),
-        ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK),
-        ("attestation", &Attestation::TEMPLATE_LINK),
-        ("timestamp", &TimestampPayload::TEMPLATE_LINK),
-        ("multi-signer", &MultiSigner::TEMPLATE_LINK),
-        ("trust-assertion", &TrustAssertion::TEMPLATE_LINK),
-        ("wallet-identification", &WalletIdentification::TEMPLATE_LINK),
-        ("access-grant", &AccessGrant::TEMPLATE_LINK),
-        ("vendor-registration", &VendorRegistration::TEMPLATE_LINK),
-        ("template-registration", &TemplateRegistration::TEMPLATE_LINK),
-        ("alias-registration", &AliasRegistration::TEMPLATE_LINK),
-        ("plugin-registration", &PluginRegistration::TEMPLATE_LINK),
+    let templates: &[(&str, &[u8; 32], &str)] = &[
+        ("file", &File::TEMPLATE_LINK, File::TEMPLATE_JSON),
+        ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK, PlatformIdentityClaim::TEMPLATE_JSON),
+        ("attestation", &Attestation::TEMPLATE_LINK, Attestation::TEMPLATE_JSON),
+        ("timestamp", &TimestampPayload::TEMPLATE_LINK, TimestampPayload::TEMPLATE_JSON),
+        ("multi-signer", &MultiSigner::TEMPLATE_LINK, MultiSigner::TEMPLATE_JSON),
+        ("trust-assertion", &TrustAssertion::TEMPLATE_LINK, TrustAssertion::TEMPLATE_JSON),
+        ("wallet-identification", &WalletIdentification::TEMPLATE_LINK, WalletIdentification::TEMPLATE_JSON),
+        ("access-grant", &AccessGrant::TEMPLATE_LINK, AccessGrant::TEMPLATE_JSON),
+        ("vendor-registration", &VendorRegistration::TEMPLATE_LINK, VendorRegistration::TEMPLATE_JSON),
+        ("template-registration", &TemplateRegistration::TEMPLATE_LINK, TemplateRegistration::TEMPLATE_JSON),
+        ("alias-registration", &AliasRegistration::TEMPLATE_LINK, AliasRegistration::TEMPLATE_JSON),
+        ("plugin-registration", &PluginRegistration::TEMPLATE_LINK, PluginRegistration::TEMPLATE_JSON),
     ];
 
     println!("Built-in Templates:\n");
-    for (name, link_bytes) in templates {
+    for (name, link_bytes, json_str) in templates {
         let rev = template_link_to_revision_link(link_bytes);
         println!("  {} ({})", name, rev);
+
+        let (mandatory, optional) = extract_template_fields(json_str);
+        if !mandatory.is_empty() {
+            println!("    Mandatory fields: {}", mandatory.join(", "));
+        }
+        if !optional.is_empty() {
+            println!("    Optional fields:  {}", optional.join(", "));
+        }
+        println!();
     }
-    println!();
 }
 
 /// CLI handler for `--create-object`.
