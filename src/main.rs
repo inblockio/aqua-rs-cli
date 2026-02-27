@@ -253,6 +253,12 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .action(ArgAction::SetTrue)
                 .help("List all available built-in templates with their hashes"),
         )
+        .arg(
+            Arg::new("minimal")
+                .long("minimal")
+                .action(ArgAction::SetTrue)
+                .help("Generate a single-revision genesis (no anchor or template revisions). Only used with -f/--file"),
+        )
         .group(
             ArgGroup::new("template")
                 .args(["template-hash", "template-name"])
@@ -312,6 +318,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let template_name = matches.get_one::<String>("template-name").cloned();
     let payload = matches.get_one::<String>("payload").cloned();
     let list_templates = matches.get_flag("list-templates");
+    let minimal = matches.get_flag("minimal");
 
     Ok(CliArgs {
         authenticate,
@@ -333,6 +340,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         template_name,
         payload,
         list_templates,
+        minimal,
     })
 }
 

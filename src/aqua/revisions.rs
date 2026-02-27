@@ -4,12 +4,13 @@
 use std::fs;
 use std::path::PathBuf;
 
-use aqua_rs_sdk::Aquafier;
 use aqua_rs_sdk::schema::{AquaTreeWrapper, FileData};
+use aqua_rs_sdk::Aquafier;
 
 use crate::models::CliArgs;
 use crate::utils::{
-    format_method_error, oprataion_logs_and_dumps, read_aqua_data, save_logs_to_file, save_page_data,
+    format_method_error, oprataion_logs_and_dumps, read_aqua_data, save_logs_to_file,
+    save_page_data,
 };
 
 /// Removes the last revision from an Aqua chain file.
@@ -70,21 +71,19 @@ pub fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
         if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str()) {
             match fs::read(&file_path) {
                 Ok(file_content) => {
-                    let file_data = FileData::new(
-                        file_name.to_string(),
-                        file_content,
-                        file_path.clone(),
-                    );
+                    let file_data =
+                        FileData::new(file_name.to_string(), file_content, file_path.clone());
 
-                    match aquafier.create_genesis_revision(file_data, None) {
+                    let genesis_result = if args.minimal {
+                        aquafier.create_minimal_genesis_revision(file_data, None)
+                    } else {
+                        aquafier.create_genesis_revision(file_data, None)
+                    };
+                    match genesis_result {
                         Ok(tree) => {
                             logs_data.push("✅ Successfully generated Aqua chain".to_string());
 
-                            let e = save_page_data(
-                                &tree,
-                                &file_path,
-                                "aqua.json".to_string(),
-                            );
+                            let e = save_page_data(&tree, &file_path, "aqua.json".to_string());
 
                             if e.is_err() {
                                 logs_data.push(format!("Error saving page data: {:#?}", e.err()));

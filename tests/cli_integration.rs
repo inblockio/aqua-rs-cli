@@ -784,9 +784,7 @@ fn link_multiple_chains() {
         })
         .expect("should have a chained anchor with link_verification_hashes");
 
-    let link_hashes = link_anchor["link_verification_hashes"]
-        .as_array()
-        .unwrap();
+    let link_hashes = link_anchor["link_verification_hashes"].as_array().unwrap();
     assert_eq!(
         link_hashes.len(),
         2,
@@ -1419,5 +1417,59 @@ fn create_object_with_invalid_payload_json_fails() {
         "invalid JSON payload should fail: stdout={} stderr={}",
         stdout,
         stderr
+    );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Minimal genesis (--minimal)
+// ═════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn generate_minimal_genesis() {
+    let (tmp, fixture_path) = setup_fixture("1.txt");
+    let output = cli()
+        .arg("-f")
+        .arg(&fixture_path)
+        .arg("--minimal")
+        .current_dir(tmp.path())
+        .output()
+        .expect("failed to run minimal genesis generation");
+
+    assert!(
+        output.status.success(),
+        "minimal genesis generation failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let aqua_path = fixture_path.with_extension("aqua.json");
+    assert!(aqua_path.exists(), "aqua.json not created");
+
+    let tree = read_tree(&aqua_path);
+
+    // Must have exactly 1 revision and 1 file_index entry
+    assert_eq!(
+        revision_count(&tree),
+        1,
+        "minimal genesis should have exactly 1 revision"
+    );
+    assert_eq!(
+        tree["file_index"].as_object().unwrap().len(),
+        1,
+        "minimal genesis should have exactly 1 file_index entry"
+    );
+
+    // The single revision must not have a previous_revision field
+    let revisions = tree["revisions"].as_object().unwrap();
+    let (_, revision) = revisions.iter().next().unwrap();
+    assert!(
+        revision.get("previous_revision").is_none(),
+        "minimal genesis revision must not have previous_revision"
+    );
+
+    // file_index should contain the original filename
+    let file_index = tree["file_index"].as_object().unwrap();
+    assert!(
+        file_index.values().any(|v| v.as_str() == Some("1.txt")),
+        "file_index should reference 1.txt"
     );
 }
