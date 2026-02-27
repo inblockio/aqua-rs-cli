@@ -3,13 +3,16 @@
 
 use std::{fs, path::PathBuf};
 
-use aqua_rs_sdk::Aquafier;
-use aqua_rs_sdk::schema::{AquaTreeWrapper, SigningCredentials};
 use aqua_rs_sdk::schema::tree::Tree;
+use aqua_rs_sdk::schema::{AquaTreeWrapper, SigningCredentials};
+use aqua_rs_sdk::Aquafier;
 
 use crate::{
     models::{CliArgs, SignType},
-    utils::{format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials, save_page_data},
+    utils::{
+        format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials,
+        save_page_data,
+    },
 };
 
 extern crate serde_json_path_to_error as serde_json;
@@ -54,10 +57,11 @@ pub(crate) async fn cli_sign_chain(
             let _cred_file = creds.unwrap();
             // If keys file has a did:key field in legacy format, the signing field
             // may already be Cli. We need to extract did_key from the file directly.
-            let key_content = fs::read_to_string(keys_file.as_ref().unwrap())
-                .expect("Unable to read keys file");
+            let key_content =
+                fs::read_to_string(keys_file.as_ref().unwrap()).expect("Unable to read keys file");
             let val: serde_json::Value = serde_json::from_str(&key_content).unwrap();
-            let did_key_str = val.get("did:key")
+            let did_key_str = val
+                .get("did:key")
                 .or_else(|| val.get("signing").and_then(|s| s.get("did_key")))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
@@ -70,7 +74,9 @@ pub(crate) async fn cli_sign_chain(
                 Vec::new()
             };
 
-            SigningCredentials::Did { did_key: did_key_bytes }
+            SigningCredentials::Did {
+                did_key: did_key_bytes,
+            }
         }
         SignType::P256 => {
             if keys_file.is_none() {
@@ -78,10 +84,11 @@ pub(crate) async fn cli_sign_chain(
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
-            let key_content = fs::read_to_string(keys_file.as_ref().unwrap())
-                .expect("Unable to read keys file");
+            let key_content =
+                fs::read_to_string(keys_file.as_ref().unwrap()).expect("Unable to read keys file");
             let val: serde_json::Value = serde_json::from_str(&key_content).unwrap();
-            let p256_key_str = val.get("p256_key")
+            let p256_key_str = val
+                .get("p256_key")
                 .or_else(|| val.get("signing").and_then(|s| s.get("p256_key")))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
@@ -94,7 +101,9 @@ pub(crate) async fn cli_sign_chain(
                 Vec::new()
             };
 
-            SigningCredentials::P256 { p256_key: p256_key_bytes }
+            SigningCredentials::P256 {
+                p256_key: p256_key_bytes,
+            }
         }
         SignType::Metamask => {
             let network_str = std::env::var("aqua_network").unwrap_or("sepolia".to_string());
@@ -121,15 +130,14 @@ pub(crate) async fn cli_sign_chain(
             });
             let wrapper = AquaTreeWrapper::new(tree, None, revision);
 
-            match aquafier.sign_aqua_tree(wrapper, &credentials, None, None).await {
+            match aquafier
+                .sign_aqua_tree(wrapper, &credentials, None, None)
+                .await
+            {
                 Ok(op_data) => {
                     logs_data.push("✅ Successfully signed Aqua chain".to_string());
 
-                    let e = save_page_data(
-                        &op_data.aqua_tree,
-                        &sign_path,
-                        "aqua.json".to_string(),
-                    );
+                    let e = save_page_data(&op_data.aqua_tree, &sign_path, "aqua.json".to_string());
 
                     if e.is_err() {
                         logs_data.push(format!("Error saving page data: {:#?}", e.err()));

@@ -2,12 +2,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use aqua_rs_sdk::primitives::RevisionLink;
+use aqua_rs_sdk::schema::template::BuiltInTemplate;
 use aqua_rs_sdk::schema::templates::{
     AccessGrant, AliasRegistration, Attestation, File, MultiSigner, PlatformIdentityClaim,
     PluginRegistration, TemplateRegistration, TimestampPayload, TrustAssertion, VendorRegistration,
     WalletIdentification,
 };
-use aqua_rs_sdk::schema::template::BuiltInTemplate;
 use aqua_rs_sdk::Aquafier;
 
 use crate::models::CliArgs;
@@ -31,25 +31,29 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
             &PlatformIdentityClaim::TEMPLATE_LINK,
         )),
         "attestation" => Ok(template_link_to_revision_link(&Attestation::TEMPLATE_LINK)),
-        "timestamp" => Ok(template_link_to_revision_link(&TimestampPayload::TEMPLATE_LINK)),
+        "timestamp" => Ok(template_link_to_revision_link(
+            &TimestampPayload::TEMPLATE_LINK,
+        )),
         "multi-signer" => Ok(template_link_to_revision_link(&MultiSigner::TEMPLATE_LINK)),
-        "trust-assertion" => Ok(template_link_to_revision_link(&TrustAssertion::TEMPLATE_LINK)),
-        "wallet-identification" => {
-            Ok(template_link_to_revision_link(&WalletIdentification::TEMPLATE_LINK))
-        }
+        "trust-assertion" => Ok(template_link_to_revision_link(
+            &TrustAssertion::TEMPLATE_LINK,
+        )),
+        "wallet-identification" => Ok(template_link_to_revision_link(
+            &WalletIdentification::TEMPLATE_LINK,
+        )),
         "access-grant" => Ok(template_link_to_revision_link(&AccessGrant::TEMPLATE_LINK)),
-        "vendor-registration" => {
-            Ok(template_link_to_revision_link(&VendorRegistration::TEMPLATE_LINK))
-        }
-        "template-registration" => {
-            Ok(template_link_to_revision_link(&TemplateRegistration::TEMPLATE_LINK))
-        }
-        "alias-registration" => {
-            Ok(template_link_to_revision_link(&AliasRegistration::TEMPLATE_LINK))
-        }
-        "plugin-registration" => {
-            Ok(template_link_to_revision_link(&PluginRegistration::TEMPLATE_LINK))
-        }
+        "vendor-registration" => Ok(template_link_to_revision_link(
+            &VendorRegistration::TEMPLATE_LINK,
+        )),
+        "template-registration" => Ok(template_link_to_revision_link(
+            &TemplateRegistration::TEMPLATE_LINK,
+        )),
+        "alias-registration" => Ok(template_link_to_revision_link(
+            &AliasRegistration::TEMPLATE_LINK,
+        )),
+        "plugin-registration" => Ok(template_link_to_revision_link(
+            &PluginRegistration::TEMPLATE_LINK,
+        )),
         _ => Err(format!("Unknown template name: {}", name)),
     }
 }
@@ -76,7 +80,11 @@ fn extract_template_fields(json_str: &str) -> (Vec<String>, Vec<String>) {
     let required: Vec<String> = schema
         .get("required")
         .and_then(|r| r.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let mut mandatory = Vec::new();
@@ -96,17 +104,61 @@ fn extract_template_fields(json_str: &str) -> (Vec<String>, Vec<String>) {
 pub(crate) fn cli_list_templates() {
     let templates: &[(&str, &[u8; 32], &str)] = &[
         ("file", &File::TEMPLATE_LINK, File::TEMPLATE_JSON),
-        ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK, PlatformIdentityClaim::TEMPLATE_JSON),
-        ("attestation", &Attestation::TEMPLATE_LINK, Attestation::TEMPLATE_JSON),
-        ("timestamp", &TimestampPayload::TEMPLATE_LINK, TimestampPayload::TEMPLATE_JSON),
-        ("multi-signer", &MultiSigner::TEMPLATE_LINK, MultiSigner::TEMPLATE_JSON),
-        ("trust-assertion", &TrustAssertion::TEMPLATE_LINK, TrustAssertion::TEMPLATE_JSON),
-        ("wallet-identification", &WalletIdentification::TEMPLATE_LINK, WalletIdentification::TEMPLATE_JSON),
-        ("access-grant", &AccessGrant::TEMPLATE_LINK, AccessGrant::TEMPLATE_JSON),
-        ("vendor-registration", &VendorRegistration::TEMPLATE_LINK, VendorRegistration::TEMPLATE_JSON),
-        ("template-registration", &TemplateRegistration::TEMPLATE_LINK, TemplateRegistration::TEMPLATE_JSON),
-        ("alias-registration", &AliasRegistration::TEMPLATE_LINK, AliasRegistration::TEMPLATE_JSON),
-        ("plugin-registration", &PluginRegistration::TEMPLATE_LINK, PluginRegistration::TEMPLATE_JSON),
+        (
+            "platform-identity",
+            &PlatformIdentityClaim::TEMPLATE_LINK,
+            PlatformIdentityClaim::TEMPLATE_JSON,
+        ),
+        (
+            "attestation",
+            &Attestation::TEMPLATE_LINK,
+            Attestation::TEMPLATE_JSON,
+        ),
+        (
+            "timestamp",
+            &TimestampPayload::TEMPLATE_LINK,
+            TimestampPayload::TEMPLATE_JSON,
+        ),
+        (
+            "multi-signer",
+            &MultiSigner::TEMPLATE_LINK,
+            MultiSigner::TEMPLATE_JSON,
+        ),
+        (
+            "trust-assertion",
+            &TrustAssertion::TEMPLATE_LINK,
+            TrustAssertion::TEMPLATE_JSON,
+        ),
+        (
+            "wallet-identification",
+            &WalletIdentification::TEMPLATE_LINK,
+            WalletIdentification::TEMPLATE_JSON,
+        ),
+        (
+            "access-grant",
+            &AccessGrant::TEMPLATE_LINK,
+            AccessGrant::TEMPLATE_JSON,
+        ),
+        (
+            "vendor-registration",
+            &VendorRegistration::TEMPLATE_LINK,
+            VendorRegistration::TEMPLATE_JSON,
+        ),
+        (
+            "template-registration",
+            &TemplateRegistration::TEMPLATE_LINK,
+            TemplateRegistration::TEMPLATE_JSON,
+        ),
+        (
+            "alias-registration",
+            &AliasRegistration::TEMPLATE_LINK,
+            AliasRegistration::TEMPLATE_JSON,
+        ),
+        (
+            "plugin-registration",
+            &PluginRegistration::TEMPLATE_LINK,
+            PluginRegistration::TEMPLATE_JSON,
+        ),
     ];
 
     println!("Built-in Templates:\n");
@@ -134,10 +186,7 @@ pub(crate) fn cli_create_object(args: CliArgs, aquafier: &Aquafier) {
         match hash_str.parse::<RevisionLink>() {
             Ok(link) => link,
             Err(e) => {
-                eprintln!(
-                    "Error: Invalid --template-hash '{}': {}",
-                    hash_str, e
-                );
+                eprintln!("Error: Invalid --template-hash '{}': {}", hash_str, e);
                 logs_data.push(format!("❌ Invalid template hash: {}", e));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;

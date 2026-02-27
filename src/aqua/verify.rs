@@ -74,18 +74,10 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
                                 .and_then(|linked_file_name| {
                                     let linked_file_path = folder_path.join(&linked_file_name);
                                     fs::read(&linked_file_path).ok().map(|content| {
-                                        FileData::new(
-                                            linked_file_name,
-                                            content,
-                                            linked_file_path,
-                                        )
+                                        FileData::new(linked_file_name, content, linked_file_path)
                                     })
                                 });
-                        linked_trees.push(AquaTreeWrapper::new(
-                            linked_tree,
-                            linked_file_obj,
-                            None,
-                        ));
+                        linked_trees.push(AquaTreeWrapper::new(linked_tree, linked_file_obj, None));
                     }
                 }
             }

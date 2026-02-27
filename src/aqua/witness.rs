@@ -3,12 +3,15 @@
 
 use std::{fs, path::PathBuf};
 
-use aqua_rs_sdk::Aquafier;
-use aqua_rs_sdk::schema::{AquaTreeWrapper, TimestampCredentials};
 use aqua_rs_sdk::schema::tree::Tree;
+use aqua_rs_sdk::schema::{AquaTreeWrapper, TimestampCredentials};
+use aqua_rs_sdk::Aquafier;
 
 use crate::models::{CliArgs, WitnessType};
-use crate::utils::{format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials, save_page_data};
+use crate::utils::{
+    format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials,
+    save_page_data,
+};
 
 extern crate serde_json_path_to_error as serde_json;
 
@@ -33,8 +36,10 @@ pub(crate) async fn cli_winess_chain(
                 if let Ok(_cred_file) = creds {
                     // Check if we have a mnemonic from the keys file
                     let key_content = fs::read_to_string(kf).unwrap_or_default();
-                    let val: serde_json::Value = serde_json::from_str(&key_content).unwrap_or(serde_json::Value::Null);
-                    let mnemonic = val.get("mnemonic")
+                    let val: serde_json::Value =
+                        serde_json::from_str(&key_content).unwrap_or(serde_json::Value::Null);
+                    let mnemonic = val
+                        .get("mnemonic")
                         .or_else(|| val.get("signing").and_then(|s| s.get("mnemonic")))
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
@@ -68,8 +73,10 @@ pub(crate) async fn cli_winess_chain(
         WitnessType::Nostr => {
             if let Some(ref kf) = keys_file {
                 let key_content = fs::read_to_string(kf).unwrap_or_default();
-                let val: serde_json::Value = serde_json::from_str(&key_content).unwrap_or(serde_json::Value::Null);
-                let nostr_sk = val.get("nostr_sk")
+                let val: serde_json::Value =
+                    serde_json::from_str(&key_content).unwrap_or(serde_json::Value::Null);
+                let nostr_sk = val
+                    .get("nostr_sk")
                     .or_else(|| val.get("timestamp").and_then(|t| t.get("nostr_sk")))
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
@@ -83,8 +90,8 @@ pub(crate) async fn cli_winess_chain(
             }
         }
         WitnessType::Tsa => {
-            let tsa_url = std::env::var("tsa_url")
-                .unwrap_or("http://timestamp.digicert.com".to_string());
+            let tsa_url =
+                std::env::var("tsa_url").unwrap_or("http://timestamp.digicert.com".to_string());
             TimestampCredentials::TSA { url: tsa_url }
         }
     };
@@ -107,15 +114,15 @@ pub(crate) async fn cli_winess_chain(
             });
             let wrapper = AquaTreeWrapper::new(tree, None, revision);
 
-            match aquafier.timestamp_aqua_tree(wrapper, &credentials, None, None).await {
+            match aquafier
+                .timestamp_aqua_tree(wrapper, &credentials, None, None)
+                .await
+            {
                 Ok(op_data) => {
                     logs_data.push("✅ Successfully witnessed Aqua chain".to_string());
 
-                    let e = save_page_data(
-                        &op_data.aqua_tree,
-                        &witness_path,
-                        "aqua.json".to_string(),
-                    );
+                    let e =
+                        save_page_data(&op_data.aqua_tree, &witness_path, "aqua.json".to_string());
 
                     if e.is_err() {
                         logs_data.push(format!("Error saving page data: {:#?}", e.err()));

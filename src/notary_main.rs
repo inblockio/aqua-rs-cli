@@ -91,7 +91,11 @@ enum Commands {
         #[arg(long)]
         gist: Option<String>,
         /// Registry server URL
-        #[arg(long, env = "AQUA_NOTARY_SERVER", default_value = "http://localhost:1984")]
+        #[arg(
+            long,
+            env = "AQUA_NOTARY_SERVER",
+            default_value = "http://localhost:1984"
+        )]
         server: String,
         /// Path to identity claim (default: ~/.aqua/identity_github.aqua.json)
         #[arg(long)]
@@ -115,7 +119,14 @@ async fn main() {
             cmd_keygen(output.as_deref(), force);
         }
         Commands::Sign { file, sign_type } => {
-            cmd_sign(&aquafier, &file, &sign_type, key_path.as_deref(), cli.verbose).await;
+            cmd_sign(
+                &aquafier,
+                &file,
+                &sign_type,
+                key_path.as_deref(),
+                cli.verbose,
+            )
+            .await;
         }
         Commands::Verify { file } => {
             cmd_verify(&aquafier, &file, cli.verbose).await;
@@ -123,10 +134,25 @@ async fn main() {
         Commands::Inspect { file } => {
             cmd_inspect(&file);
         }
-        Commands::Identity { provider, client_id } => {
-            cmd_identity(&aquafier, &provider, client_id.as_deref(), key_path.as_deref()).await;
+        Commands::Identity {
+            provider,
+            client_id,
+        } => {
+            cmd_identity(
+                &aquafier,
+                &provider,
+                client_id.as_deref(),
+                key_path.as_deref(),
+            )
+            .await;
         }
-        Commands::Publish { file, gist, server, identity, content_type } => {
+        Commands::Publish {
+            file,
+            gist,
+            server,
+            identity,
+            content_type,
+        } => {
             cmd_publish(
                 &aquafier,
                 &file,
@@ -185,10 +211,11 @@ fn resolve_key_path(explicit: Option<&Path>) -> Option<PathBuf> {
     None
 }
 
-fn load_credentials(sign_type: &str, key_path: Option<&Path>) -> Result<SigningCredentials, String> {
-    let path = key_path.ok_or(
-        "No keys file found. Run:  aqua-notary keygen",
-    )?;
+fn load_credentials(
+    sign_type: &str,
+    key_path: Option<&Path>,
+) -> Result<SigningCredentials, String> {
+    let path = key_path.ok_or("No keys file found. Run:  aqua-notary keygen")?;
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Cannot read keys file {}: {}", path.display(), e))?;
     let val: serde_json::Value =
@@ -201,7 +228,9 @@ fn load_credentials(sign_type: &str, key_path: Option<&Path>) -> Result<SigningC
                 .or_else(|| val.get("signing").and_then(|s| s.get("did_key")))
                 .and_then(|v| v.as_str())
                 .ok_or("No 'did:key' field found in keys file")?;
-            Ok(SigningCredentials::Did { did_key: decode_hex(key_str)? })
+            Ok(SigningCredentials::Did {
+                did_key: decode_hex(key_str)?,
+            })
         }
         "cli" => {
             let mnemonic = val
@@ -218,9 +247,14 @@ fn load_credentials(sign_type: &str, key_path: Option<&Path>) -> Result<SigningC
                 .or_else(|| val.get("signing").and_then(|s| s.get("p256_key")))
                 .and_then(|v| v.as_str())
                 .ok_or("No 'p256_key' field found in keys file")?;
-            Ok(SigningCredentials::P256 { p256_key: decode_hex(key_str)? })
+            Ok(SigningCredentials::P256 {
+                p256_key: decode_hex(key_str)?,
+            })
         }
-        other => Err(format!("Unknown sign type '{}'. Valid options: did, cli, p256", other)),
+        other => Err(format!(
+            "Unknown sign type '{}'. Valid options: did, cli, p256",
+            other
+        )),
     }
 }
 
@@ -265,8 +299,7 @@ fn load_github_token() -> Option<String> {
 fn save_github_token(token: &str) -> Result<PathBuf, String> {
     let path = github_token_path();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Cannot create ~/.aqua: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Cannot create ~/.aqua: {}", e))?;
     }
     fs::write(&path, token).map_err(|e| format!("Cannot write token file: {}", e))?;
     #[cfg(unix)]
@@ -288,10 +321,7 @@ async fn create_github_gist(
 ) -> Result<String, String> {
     let mut files_json = serde_json::Map::new();
     for (name, content) in files {
-        files_json.insert(
-            name.to_string(),
-            serde_json::json!({ "content": content }),
-        );
+        files_json.insert(name.to_string(), serde_json::json!({ "content": content }));
     }
 
     let client = reqwest::Client::new();
@@ -315,8 +345,10 @@ async fn create_github_gist(
         return Err(format!("GitHub API returned {}: {}", status, body));
     }
 
-    let result: serde_json::Value =
-        resp.json().await.map_err(|e| format!("Invalid response: {}", e))?;
+    let result: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Invalid response: {}", e))?;
     result["html_url"]
         .as_str()
         .map(|s| s.to_string())
@@ -331,15 +363,15 @@ fn aqua_path(file: &Path) -> PathBuf {
 }
 
 fn read_tree(path: &Path) -> Result<Tree, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Cannot read {}: {}", path.display(), e))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Cannot read {}: {}", path.display(), e))?;
     serde_json::from_str(&content)
         .map_err(|e| format!("Cannot parse Aqua tree at {}: {}", path.display(), e))
 }
 
 fn write_tree(tree: &Tree, path: &Path) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(tree)
-        .map_err(|e| format!("Cannot serialize tree: {}", e))?;
+    let json =
+        serde_json::to_string_pretty(tree).map_err(|e| format!("Cannot serialize tree: {}", e))?;
     fs::write(path, json).map_err(|e| format!("Cannot write {}: {}", path.display(), e))
 }
 
@@ -389,7 +421,10 @@ fn cmd_keygen(output: Option<&Path>, force: bool) {
 
     let did_string = match DIDSigner::new().derive_did_pkh(&key_bytes) {
         Ok(d) => d,
-        Err(e) => { eprintln!("❌ Failed to derive DID: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Failed to derive DID: {}", e);
+            return;
+        }
     };
 
     let keys = serde_json::json!({
@@ -409,16 +444,23 @@ fn cmd_keygen(output: Option<&Path>, force: bool) {
         // Write with restricted permissions on Unix
         use std::os::unix::fs::OpenOptionsExt;
         match std::fs::OpenOptions::new()
-            .write(true).create(true).truncate(true).mode(0o600)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
             .open(&out_path)
         {
             Ok(mut f) => {
-                if let Err(e) = f.write_all(serde_json::to_string_pretty(&keys).unwrap().as_bytes()) {
+                if let Err(e) = f.write_all(serde_json::to_string_pretty(&keys).unwrap().as_bytes())
+                {
                     eprintln!("❌ Cannot write {}: {}", out_path.display(), e);
                     return;
                 }
             }
-            Err(e) => { eprintln!("❌ Cannot create {}: {}", out_path.display(), e); return; }
+            Err(e) => {
+                eprintln!("❌ Cannot create {}: {}", out_path.display(), e);
+                return;
+            }
         }
     }
     #[cfg(not(unix))]
@@ -446,29 +488,60 @@ async fn cmd_sign(
     let aqua_file = aqua_path(file);
     let credentials = match load_credentials(sign_type, key_path) {
         Ok(c) => c,
-        Err(e) => { eprintln!("❌ {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
     };
 
     let tree = if aqua_file.exists() {
         match read_tree(&aqua_file) {
             Ok(t) => t,
-            Err(e) => { eprintln!("❌ {}", e); return; }
+            Err(e) => {
+                eprintln!("❌ {}", e);
+                return;
+            }
         }
     } else {
         let content = match fs::read(file) {
             Ok(c) => c,
-            Err(e) => { eprintln!("❌ Cannot read {}: {}", file.display(), e); return; }
+            Err(e) => {
+                eprintln!("❌ Cannot read {}: {}", file.display(), e);
+                return;
+            }
         };
-        let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("CLAUDE.md").to_string();
-        match aquafier.create_genesis_revision(FileData::new(name, content, file.to_path_buf()), None) {
-            Ok(t) => { println!("  Created genesis revision for {}", file.display()); t }
-            Err(e) => { eprintln!("❌ Genesis creation failed: {}", e); return; }
+        let name = file
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("CLAUDE.md")
+            .to_string();
+        match aquafier
+            .create_genesis_revision(FileData::new(name, content, file.to_path_buf()), None)
+        {
+            Ok(t) => {
+                println!("  Created genesis revision for {}", file.display());
+                t
+            }
+            Err(e) => {
+                eprintln!("❌ Genesis creation failed: {}", e);
+                return;
+            }
         }
     };
 
-    match aquafier.sign_aqua_tree(AquaTreeWrapper::new(tree, None, None), &credentials, None, None).await {
+    match aquafier
+        .sign_aqua_tree(
+            AquaTreeWrapper::new(tree, None, None),
+            &credentials,
+            None,
+            None,
+        )
+        .await
+    {
         Ok(op) => {
-            if verbose { print_logs(&op.log_data); }
+            if verbose {
+                print_logs(&op.log_data);
+            }
             match write_tree(&op.aqua_tree, &aqua_file) {
                 Ok(_) => println!("✅ Signed  →  {}", aqua_file.display()),
                 Err(e) => eprintln!("❌ {}", e),
@@ -488,7 +561,10 @@ async fn cmd_verify(aquafier: &Aquafier, file: &Path, verbose: bool) {
 
     let tree = match read_tree(&aqua_file) {
         Ok(t) => t,
-        Err(e) => { eprintln!("❌ {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
     };
 
     let mut file_objects = vec![];
@@ -499,7 +575,10 @@ async fn cmd_verify(aquafier: &Aquafier, file: &Path, verbose: bool) {
         }
     }
 
-    match aquafier.verify_aqua_tree(AquaTreeWrapper::new(tree, None, None), file_objects).await {
+    match aquafier
+        .verify_aqua_tree(AquaTreeWrapper::new(tree, None, None), file_objects)
+        .await
+    {
         Ok(result) => {
             if result.is_valid {
                 println!("✅ {} — Valid", file.display());
@@ -507,7 +586,9 @@ async fn cmd_verify(aquafier: &Aquafier, file: &Path, verbose: bool) {
                 println!("❌ {} — Invalid", file.display());
                 println!("   {}", result.status);
             }
-            if verbose || !result.is_valid { print_logs(&result.logs); }
+            if verbose || !result.is_valid {
+                print_logs(&result.logs);
+            }
         }
         Err(e) => eprintln!("❌ Verification error: {}", e),
     }
@@ -523,7 +604,10 @@ fn cmd_inspect(file: &Path) {
 
     let tree = match read_tree(&aqua_file) {
         Ok(t) => t,
-        Err(e) => { eprintln!("❌ {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
     };
 
     println!("File:       {}", file.display());
@@ -533,15 +617,28 @@ fn cmd_inspect(file: &Path) {
 
     for (i, (hash, revision)) in tree.revisions.iter().enumerate() {
         let rev_val = serde_json::to_value(revision).unwrap_or_default();
-        let rev_type = rev_val.get("revision_type").and_then(|v| v.as_str()).unwrap_or("unknown");
-        let timestamp = rev_val.get("local_timestamp").and_then(|v| v.as_str()).unwrap_or("");
-        let signer = rev_val.get("signer_did").and_then(|v| v.as_str()).unwrap_or("");
+        let rev_type = rev_val
+            .get("revision_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let timestamp = rev_val
+            .get("local_timestamp")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let signer = rev_val
+            .get("signer_did")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let hash_str = format!("{}", hash);
         let short = &hash_str[..20.min(hash_str.len())];
         print!("  [{}] {:12}  {}...", i + 1, rev_type, short);
-        if !timestamp.is_empty() { print!("  {}", timestamp); }
+        if !timestamp.is_empty() {
+            print!("  {}", timestamp);
+        }
         println!();
-        if !signer.is_empty() { println!("       signer: {}", signer); }
+        if !signer.is_empty() {
+            println!("       signer: {}", signer);
+        }
     }
 }
 
@@ -562,12 +659,18 @@ async fn cmd_identity(
     // ── Step 1: derive DID ─────────────────────────────────────────────────────
     let key_bytes = match load_did_key_bytes(key_path) {
         Ok(b) => b,
-        Err(e) => { eprintln!("❌ {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
     };
 
     let did_string = match DIDSigner::new().derive_did_pkh(&key_bytes) {
         Ok(d) => d,
-        Err(e) => { eprintln!("❌ Failed to derive DID: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Failed to derive DID: {}", e);
+            return;
+        }
     };
 
     println!("  DID:  {}", did_string);
@@ -581,20 +684,29 @@ async fn cmd_identity(
             IdentityCredentials::GitHub { client_id: cid }
         }
         other => {
-            eprintln!("❌ Unknown provider '{}'. Currently supported: github", other);
+            eprintln!(
+                "❌ Unknown provider '{}'. Currently supported: github",
+                other
+            );
             return;
         }
     };
 
     let id_provider = match credentials.into_provider() {
         Ok(p) => p,
-        Err(e) => { eprintln!("❌ Failed to create identity provider: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Failed to create identity provider: {}", e);
+            return;
+        }
     };
 
     // ── Step 3: Device Flow ────────────────────────────────────────────────────
     let session = match id_provider.initiate().await {
         Ok(s) => s,
-        Err(e) => { eprintln!("❌ Failed to initiate auth flow: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Failed to initiate auth flow: {}", e);
+            return;
+        }
     };
 
     println!();
@@ -615,13 +727,22 @@ async fn cmd_identity(
     println!("  Authenticating…");
     let identity = match id_provider.authenticate(&session).await {
         Ok(id) => id,
-        Err(e) => { eprintln!("❌ Authentication failed: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Authentication failed: {}", e);
+            return;
+        }
     };
 
-    println!("  ✅ Authenticated as {} ({})", identity.display_name, identity.provider_id);
+    println!(
+        "  ✅ Authenticated as {} ({})",
+        identity.display_name, identity.provider_id
+    );
 
-    let github_username = identity.metadata.get("github_username")
-        .and_then(|v| v.as_str()).unwrap_or("unknown");
+    let github_username = identity
+        .metadata
+        .get("github_username")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
 
     // ── Step 5: build and sign PlatformIdentityClaim ───────────────────────────
     // Sign BEFORE creating the gist so the gist contains the signed Aqua tree.
@@ -647,27 +768,44 @@ async fn cmd_identity(
 
     let claim_tree = match aquafier.create_identity_claim(None, claim, None) {
         Ok(t) => t,
-        Err(e) => { eprintln!("❌ Failed to create identity claim tree: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Failed to create identity claim tree: {}", e);
+            return;
+        }
     };
 
     let signing_creds = match load_credentials("did", key_path) {
         Ok(c) => c,
-        Err(e) => { eprintln!("❌ {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
     };
 
     let signed = match aquafier
-        .sign_aqua_tree(AquaTreeWrapper::new(claim_tree, None, None), &signing_creds, None, None)
+        .sign_aqua_tree(
+            AquaTreeWrapper::new(claim_tree, None, None),
+            &signing_creds,
+            None,
+            None,
+        )
         .await
     {
         Ok(op) => op.aqua_tree,
-        Err(e) => { eprintln!("❌ Signing failed: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Signing failed: {}", e);
+            return;
+        }
     };
 
     let claim_hash = tree_tip_hash(&signed).unwrap_or_default();
 
     // ── Step 6: preview and confirm gist creation ──────────────────────────────
     println!();
-    println!("  A PUBLIC gist will be created on your GitHub account (@{}).", github_username);
+    println!(
+        "  A PUBLIC gist will be created on your GitHub account (@{}).",
+        github_username
+    );
     println!("  File: identity_claim.aqua.json");
     println!("  It contains your signed Aqua identity claim — verifiable by anyone.");
     println!("  Proof: GitHub account control + DID private key signature.");
@@ -684,17 +822,30 @@ async fn cmd_identity(
     }
 
     // ── Step 7: create gist with signed claim tree ─────────────────────────────
-    let proof = match id_provider.create_proof(&session, &identity, &did_string, Some(&signed)).await {
+    let proof = match id_provider
+        .create_proof(&session, &identity, &did_string, Some(&signed))
+        .await
+    {
         Ok(p) => p,
-        Err(e) => { eprintln!("❌ Proof creation failed: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Proof creation failed: {}", e);
+            return;
+        }
     };
 
     println!("  ✅ Proof gist created: {}", proof.proof_url);
 
     // ── Step 8: save GitHub token for use by `publish` ─────────────────────────
-    if let Some(token) = identity.metadata.get("access_token").and_then(|v| v.as_str()) {
+    if let Some(token) = identity
+        .metadata
+        .get("access_token")
+        .and_then(|v| v.as_str())
+    {
         match save_github_token(token) {
-            Ok(path) => println!("  ✅ GitHub token saved to {} (used by `publish`)", path.display()),
+            Ok(path) => println!(
+                "  ✅ GitHub token saved to {} (used by `publish`)",
+                path.display()
+            ),
             Err(e) => eprintln!("  ⚠  Could not save GitHub token: {}", e),
         }
     }
@@ -703,7 +854,8 @@ async fn cmd_identity(
     let out_path = identity_claim_path(provider);
     if let Some(parent) = out_path.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!("❌ Cannot create directory: {}", e); return;
+            eprintln!("❌ Cannot create directory: {}", e);
+            return;
         }
     }
 
@@ -711,7 +863,10 @@ async fn cmd_identity(
         Ok(_) => {
             println!();
             println!("✅ Identity claim saved to {}", out_path.display());
-            println!("   Provider:   {} (@{})", identity.provider, github_username);
+            println!(
+                "   Provider:   {} (@{})",
+                identity.provider, github_username
+            );
             println!("   DID:        {}", did_string);
             println!("   Proof gist: {}", proof.proof_url);
             println!("   Claim hash: {}", claim_hash);
@@ -743,7 +898,10 @@ async fn cmd_publish(
 
     if !aqua_file.exists() {
         println!("  No signed sidecar found ({}).", aqua_file.display());
-        println!("  This will create a cryptographic record that {} was signed by your DID.", file.display());
+        println!(
+            "  This will create a cryptographic record that {} was signed by your DID.",
+            file.display()
+        );
         println!();
         if !confirm("  Sign the file now?") {
             println!("  Aborted. Run:  aqua-notary sign {}", file.display());
@@ -759,7 +917,10 @@ async fn cmd_publish(
     // ── Step 2: read file content and compute content hash ────────────────────
     let content_bytes = match fs::read(file) {
         Ok(c) => c,
-        Err(e) => { eprintln!("❌ Cannot read {}: {}", file.display(), e); return; }
+        Err(e) => {
+            eprintln!("❌ Cannot read {}: {}", file.display(), e);
+            return;
+        }
     };
     let content_hash = format!("{:x}", Sha256::digest(&content_bytes));
     let content_str = String::from_utf8_lossy(&content_bytes);
@@ -767,7 +928,10 @@ async fn cmd_publish(
     // Get the Aqua tree tip hash
     let aqua_tree_hash = match read_tree(&aqua_file) {
         Ok(t) => tree_tip_hash(&t),
-        Err(e) => { eprintln!("❌ {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
     };
 
     // ── Step 3: load identity claim ────────────────────────────────────────────
@@ -783,7 +947,10 @@ async fn cmd_publish(
 
     let (identity_claim_hash, identity_claim_tree_val) = match read_tree(&id_path) {
         Ok(t) => (tree_tip_hash(&t), serde_json::to_value(&t).ok()),
-        Err(e) => { eprintln!("❌ Cannot read identity claim: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Cannot read identity claim: {}", e);
+            return;
+        }
     };
 
     // ── Step 4: resolve gist URL (auto-create if not provided) ────────────────
@@ -802,7 +969,8 @@ async fn cmd_publish(
                 }
             };
 
-            let filename = file.file_name()
+            let filename = file
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("CLAUDE.md");
 
@@ -821,14 +989,11 @@ async fn cmd_publish(
 
             // Read the sidecar so the gist is self-contained: file + signature.
             let sidecar_name = format!("{}.aqua.json", filename);
-            let sidecar_str = fs::read_to_string(&aqua_file)
-                .unwrap_or_else(|_| "{}".to_string());
+            let sidecar_str = fs::read_to_string(&aqua_file).unwrap_or_else(|_| "{}".to_string());
 
             let description = format!("{} — published via aqua-notary", filename);
-            let gist_files: Vec<(&str, &str)> = vec![
-                (filename, &content_str),
-                (&sidecar_name, &sidecar_str),
-            ];
+            let gist_files: Vec<(&str, &str)> =
+                vec![(filename, &content_str), (&sidecar_name, &sidecar_str)];
 
             match create_github_gist(&token, &gist_files, &description).await {
                 Ok(url) => {
@@ -853,24 +1018,42 @@ async fn cmd_publish(
     });
 
     let payload_bytes = serde_json::to_vec_pretty(&payload).unwrap();
-    let file_data = FileData::new("command.json".to_string(), payload_bytes, PathBuf::from("command.json"));
+    let file_data = FileData::new(
+        "command.json".to_string(),
+        payload_bytes,
+        PathBuf::from("command.json"),
+    );
 
     let cmd_tree = match aquafier.create_genesis_revision(file_data, None) {
         Ok(t) => t,
-        Err(e) => { eprintln!("❌ Failed to create command tree: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Failed to create command tree: {}", e);
+            return;
+        }
     };
 
     let signing_creds = match load_credentials("did", key_path) {
         Ok(c) => c,
-        Err(e) => { eprintln!("❌ {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            return;
+        }
     };
 
     let signed_cmd = match aquafier
-        .sign_aqua_tree(AquaTreeWrapper::new(cmd_tree, None, None), &signing_creds, None, None)
+        .sign_aqua_tree(
+            AquaTreeWrapper::new(cmd_tree, None, None),
+            &signing_creds,
+            None,
+            None,
+        )
         .await
     {
         Ok(op) => op.aqua_tree,
-        Err(e) => { eprintln!("❌ Signing failed: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Signing failed: {}", e);
+            return;
+        }
     };
 
     // ── Step 6: POST to server ─────────────────────────────────────────────────
@@ -887,7 +1070,10 @@ async fn cmd_publish(
     let client = reqwest::Client::new();
     let resp = match client.post(&url).json(&body).send().await {
         Ok(r) => r,
-        Err(e) => { eprintln!("❌ Request failed: {}", e); return; }
+        Err(e) => {
+            eprintln!("❌ Request failed: {}", e);
+            return;
+        }
     };
 
     let status = resp.status();
@@ -918,7 +1104,10 @@ async fn cmd_publish(
             println!("   The registry will detect the deletion and deactivate it automatically.");
         }
     } else {
-        let msg = body.get("message").and_then(|v| v.as_str()).unwrap_or("unknown error");
+        let msg = body
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown error");
         eprintln!("❌ Server returned {}: {}", status, msg);
     }
 }

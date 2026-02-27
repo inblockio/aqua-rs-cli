@@ -67,15 +67,18 @@ pub fn read_credentials(path: &PathBuf) -> Result<CredentialsFile, String> {
                     let legacy: Result<serde_json::Value, _> = serde_json::from_str(&data);
                     match legacy {
                         Ok(val) => {
-                            let mnemonic = val.get("mnemonic")
+                            let mnemonic = val
+                                .get("mnemonic")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("")
                                 .to_string();
-                            let nostr_sk = val.get("nostr_sk")
+                            let nostr_sk = val
+                                .get("nostr_sk")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("")
                                 .to_string();
-                            let did_key_str = val.get("did:key")
+                            let did_key_str = val
+                                .get("did:key")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("")
                                 .to_string();
@@ -92,20 +95,14 @@ pub fn read_credentials(path: &PathBuf) -> Result<CredentialsFile, String> {
                                 mnemonic: mnemonic.clone(),
                             };
                             let timestamp = if !nostr_sk.is_empty() && nostr_sk != "sample" {
-                                TimestampCredentials::Nostr {
-                                    nostr_sk,
-                                }
+                                TimestampCredentials::Nostr { nostr_sk }
                             } else {
-                                TimestampCredentials::Nostr {
-                                    nostr_sk,
-                                }
+                                TimestampCredentials::Nostr { nostr_sk }
                             };
 
                             Ok(CredentialsFile { signing, timestamp })
                         }
-                        Err(err_data) => {
-                            Err(format!("Error, parsing keys json {}", err_data))
-                        }
+                        Err(err_data) => Err(format!("Error, parsing keys json {}", err_data)),
                     }
                 }
             }
@@ -219,9 +216,7 @@ pub fn oprataion_logs_and_dumps(args: CliArgs, logs_data: Vec<String>) {
 
 pub fn format_method_error(err: &aqua_rs_sdk::primitives::MethodError) -> Vec<String> {
     match err {
-        aqua_rs_sdk::primitives::MethodError::WithLogs(logs) => {
-            log_with_emoji(logs.clone())
-        }
+        aqua_rs_sdk::primitives::MethodError::WithLogs(logs) => log_with_emoji(logs.clone()),
         other => vec![format!("{}", other)],
     }
 }
