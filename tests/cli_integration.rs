@@ -601,6 +601,59 @@ fn link_two_chains() {
 }
 
 #[test]
+fn link_and_verify_resolves_cross_tree_references() {
+    let tmp = TempDir::new().unwrap();
+
+    // Copy fixtures for two text files
+    fs::copy(test_files_dir().join("1.txt"), tmp.path().join("1.txt")).unwrap();
+    fs::copy(test_files_dir().join("2.txt"), tmp.path().join("2.txt")).unwrap();
+
+    // Generate both chains
+    cli()
+        .arg("-f")
+        .arg(tmp.path().join("1.txt"))
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+    cli()
+        .arg("-f")
+        .arg(tmp.path().join("2.txt"))
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+
+    let chain1 = tmp.path().join("1.aqua.json");
+    let chain2 = tmp.path().join("2.aqua.json");
+
+    // Link chain2 into chain1
+    let link_out = cli()
+        .arg("--link")
+        .arg(&chain1)
+        .arg(&chain2)
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&link_out.stdout).contains("Successfully linked"),
+        "link should succeed"
+    );
+
+    // The linked chain's file_index should contain the .aqua.json reference
+    let tree = read_tree(&chain1);
+    let file_index = tree["file_index"].as_object().unwrap();
+    let has_aqua_json_ref = file_index
+        .values()
+        .any(|v| v.as_str().map_or(false, |s| s.ends_with(".aqua.json")));
+    assert!(
+        has_aqua_json_ref,
+        "file_index should contain .aqua.json reference for the linked chain"
+    );
+
+    // Verify the linked chain — the verifier should auto-load the linked
+    // chain from file_index and resolve cross-tree anchor references.
+    assert_verify_ok(&chain1);
+}
+
+#[test]
 fn link_produces_valid_structure() {
     let tmp = TempDir::new().unwrap();
 
@@ -918,12 +971,7 @@ fn verbose_produces_more_output_than_quiet() {
     let (_tmp, _fix, aqua) = generate_genesis("1.txt");
 
     let quiet = cli().arg("-a").arg(&aqua).output().unwrap();
-    let verbose = cli()
-        .arg("-a")
-        .arg(&aqua)
-        .arg("-v")
-        .output()
-        .unwrap();
+    let verbose = cli().arg("-a").arg(&aqua).arg("-v").output().unwrap();
 
     let quiet_len = String::from_utf8_lossy(&quiet.stdout).len();
     let verbose_len = String::from_utf8_lossy(&verbose.stdout).len();
@@ -1175,8 +1223,10 @@ fn full_workflow_generate_link_sign() {
         .unwrap();
     assert!(String::from_utf8_lossy(&sign.stdout).contains("Successfully signed"));
 
-    // Linked chains contain cross-tree anchor references that won't resolve
-    // in isolation, so we verify structure rather than full verification.
+    // Verify the linked + signed chain. The verifier should auto-load
+    // the linked chain file from file_index entries ending in .aqua.json.
+    assert_verify_ok(&chain1);
+
     let tree = read_tree(&chain1);
     assert!(
         revision_count(&tree) > 4,
