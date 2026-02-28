@@ -6,7 +6,6 @@
 use aqua_rs_sdk::{
     primitives::{Method, MethodError, RevisionLink},
     schema::{
-        template::BuiltInTemplate,
         templates::{Attestation, PlatformIdentityClaim, TrustAssertion},
         tree::Tree,
         AquaTreeWrapper, SigningCredentials,
@@ -28,11 +27,13 @@ pub fn build_claim_tree(
         display_name: "sim-user".to_string(),
         email: None,
         proof_url: None,
+        profile_url: None,
+        avatar_url: None,
         valid_from,
         valid_until,
         metadata: None,
     };
-    aquafier.create_identity_claim(None, claim, Some(Method::Scalar))
+    aquafier.identity().claim(claim, Some(Method::Scalar))
 }
 
 /// Sign a tree with an Ed25519 key (`did:pkh:ed25519`).
@@ -63,17 +64,15 @@ pub async fn sign_p256(
     Ok(op.aqua_tree)
 }
 
-/// Helper: convert a `[u8; 32]` TEMPLATE_LINK constant to a `RevisionLink`.
-fn template_to_link(bytes: &[u8; 32]) -> RevisionLink {
-    format!("0x{}", hex::encode(bytes))
-        .parse()
-        .expect("built-in TEMPLATE_LINK is always a valid RevisionLink")
-}
-
-/// Build an `Attestation` genesis tree (unsigned).
+/// Build an `Attestation` genesis tree (unsigned, not yet linked to a signer).
 ///
-/// Uses `create_object` with the Attestation template hash. The `claim_sig_hash`
-/// is stored in the payload context field as an informational reference.
+/// The genesis anchor carries `claim_sig_hash` as its sole
+/// `link_verification_hashes` entry — the structural import declaring that
+/// this attestation depends on that specific signed claim revision.
+///
+/// `claim_obj_hash` is recorded in the payload `context` field as an
+/// informational string reference to the claim *object* revision (not a
+/// structural link).
 pub fn build_attestation_tree(
     aquafier: &Aquafier,
     attester_did: &str,
@@ -88,13 +87,13 @@ pub fn build_attestation_tree(
         valid_from,
         valid_until,
     };
-    let _ = claim_sig_hash; // structural link via genesis anchor not available in current SDK
-    let payload = serde_json::to_value(&attest)?;
-    let template_link = template_to_link(&Attestation::TEMPLATE_LINK);
-    aquafier.create_object(template_link, None, payload, Some(Method::Scalar))
+    aquafier
+        .identity()
+        .attestation(attest, claim_sig_hash, Some(Method::Scalar))
 }
 
-/// Build a "headless" attestation tree (no claim link).
+/// Build a "headless" attestation tree: genesis anchor links to a nonexistent
+/// hash, so the anchor cannot be resolved (A1 scenario).
 pub fn build_headless_attestation_tree(
     aquafier: &Aquafier,
     attester_did: &str,
@@ -105,9 +104,9 @@ pub fn build_headless_attestation_tree(
         valid_from: None,
         valid_until: None,
     };
-    let payload = serde_json::to_value(&attest)?;
-    let template_link = template_to_link(&Attestation::TEMPLATE_LINK);
-    aquafier.create_object(template_link, None, payload, Some(Method::Scalar))
+    aquafier
+        .identity()
+        .headless_attestation(attest, Some(Method::Scalar))
 }
 
 /// Build a `TrustAssertion` tree asserting `trust_level` for `subject_did`.
@@ -125,7 +124,7 @@ pub fn build_trust_assertion_tree(
         domains: None,
         reason: Some("simulation".to_string()),
     };
-    let payload = serde_json::to_value(&ta)?;
-    let template_link = template_to_link(&TrustAssertion::TEMPLATE_LINK);
-    aquafier.create_object(template_link, None, payload, Some(Method::Scalar))
+    aquafier
+        .identity()
+        .trust_assertion(ta, Some(Method::Scalar))
 }

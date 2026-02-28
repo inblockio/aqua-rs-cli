@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use aqua_rs_sdk::primitives::RevisionLink;
 use aqua_rs_sdk::schema::template::BuiltInTemplate;
 use aqua_rs_sdk::schema::templates::{
-    AccessGrant, AliasRegistration, Attestation, File, MultiSigner, PlatformIdentityClaim,
-    PluginRegistration, TemplateRegistration, TimestampPayload, TrustAssertion, VendorRegistration,
-    WalletIdentification,
+    AccessGrant, AliasRegistration, Attestation, EvmTimestampPayload, File, MultiSigner,
+    PlatformIdentityClaim, PluginRegistration, TemplateRegistration, TrustAssertion,
+    VendorRegistration, WalletIdentification,
 };
 use aqua_rs_sdk::Aquafier;
 
@@ -31,7 +31,7 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
         "platform-identity" => Ok(template_link_to_revision_link(
             &PlatformIdentityClaim::TEMPLATE_LINK,
         )),
-        "timestamp" => Ok(template_link_to_revision_link(&TimestampPayload::TEMPLATE_LINK)),
+        "timestamp" => Ok(template_link_to_revision_link(&EvmTimestampPayload::TEMPLATE_LINK)),
         "multi-signer" => Ok(template_link_to_revision_link(&MultiSigner::TEMPLATE_LINK)),
         "trust-assertion" => Ok(template_link_to_revision_link(&TrustAssertion::TEMPLATE_LINK)),
         "wallet-identification" => Ok(template_link_to_revision_link(
@@ -61,7 +61,7 @@ pub(crate) fn cli_list_templates() {
         ("file", &File::TEMPLATE_LINK),
         ("attestation", &Attestation::TEMPLATE_LINK),
         ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK),
-        ("timestamp", &TimestampPayload::TEMPLATE_LINK),
+        ("timestamp", &EvmTimestampPayload::TEMPLATE_LINK),
         ("multi-signer", &MultiSigner::TEMPLATE_LINK),
         ("trust-assertion", &TrustAssertion::TEMPLATE_LINK),
         ("wallet-identification", &WalletIdentification::TEMPLATE_LINK),

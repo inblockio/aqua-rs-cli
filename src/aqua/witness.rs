@@ -29,7 +29,7 @@ pub(crate) async fn cli_winess_chain(
         WitnessType::Eth => {
             let api_key = std::env::var("api_key").unwrap_or_default();
             let network_str = std::env::var("aqua_network").unwrap_or("sepolia".to_string());
-            let eth_network = parse_eth_network(&network_str);
+            let network = parse_eth_network(&network_str);
 
             if let Some(ref kf) = keys_file {
                 let creds = read_credentials(kf);
@@ -47,25 +47,22 @@ pub(crate) async fn cli_winess_chain(
                     if !mnemonic.is_empty() {
                         TimestampCredentials::Cli {
                             mnemonic,
-                            alchemy_key: api_key,
-                            network: eth_network,
+                            rpc_url: api_key,
+                            evm_chain: network,
                         }
                     } else {
                         TimestampCredentials::Metamask {
-                            alchemy_key: api_key,
-                            network: eth_network,
+                            evm_chain: network,
                         }
                     }
                 } else {
                     TimestampCredentials::Metamask {
-                        alchemy_key: api_key,
-                        network: eth_network,
+                        evm_chain: network,
                     }
                 }
             } else {
                 TimestampCredentials::Metamask {
-                    alchemy_key: api_key,
-                    network: eth_network,
+                    evm_chain: network,
                 }
             }
         }

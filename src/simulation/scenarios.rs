@@ -57,9 +57,8 @@ use std::sync::Arc;
 use aqua_rs_sdk::{
     primitives::RevisionLink,
     schema::{tree::Tree, AquaTreeWrapper},
-    Aquafier, VerificationResult,
+    Aquafier, DefaultTrustStore, VerificationResult,
 };
-use aqua_rs_sdk::core::host::trust_store::DefaultTrustStore;
 
 use crate::simulation::builders;
 use crate::simulation::keygen;

@@ -7,7 +7,10 @@ This project depends on [aqua-rs-sdk](https://github.com/inblockio/aqua-rs-sdk) 
 
 ### Auditing simulation trees
 Run once to persist the files:
+```bash
 cargo run --features simulation --bin aqua-cli -- --simulate --keep
+cargo run --features simulation --bin aqua-cli -- --simulate-personas --keep
+```
 The directory path is printed — e.g. /tmp/aqua-sim-6MSEts.
 
 in your environment set the following variables.<br/>

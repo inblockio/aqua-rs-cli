@@ -21,6 +21,7 @@ cargo run --bin aqua-cli --features simulation -- --simulate -v
 | Skill | Topic |
 |---|---|
 | `skills/claim-attestation-building.md` | Correct way to build `PlatformIdentityClaim` + `Attestation` trees |
+| `skills/template-tree-structure.md` | Template-based tree structure: genesis anchor model, L1/L2 hierarchy |
 
 ---
 

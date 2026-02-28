@@ -107,8 +107,8 @@ pub(crate) async fn cli_sign_chain(
         }
         SignType::Metamask => {
             let network_str = std::env::var("aqua_network").unwrap_or("sepolia".to_string());
-            let eth_network = parse_eth_network(&network_str);
-            SigningCredentials::Metamask { eth_network }
+            let evm_chain = parse_eth_network(&network_str);
+            SigningCredentials::Metamask { evm_chain }
         }
     };
 

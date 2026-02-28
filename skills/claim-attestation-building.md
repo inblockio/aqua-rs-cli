@@ -15,7 +15,13 @@ let claim = PlatformIdentityClaim {
     provider: "email".to_string(),
     provider_id: "alice@example.com".to_string(),
     display_name: "Alice".to_string(),
-    ..Default::default()
+    email: None,
+    proof_url: None,
+    profile_url: None,
+    avatar_url: None,
+    valid_from: None,
+    valid_until: None,
+    metadata: None,
 };
 
 // 1. Build unsigned claim (template + genesis anchor + object)
@@ -102,10 +108,14 @@ let (result, _) = aquafier
 // "attested" — attester in trust store at level ≥ 1
 let mut levels = HashMap::new();
 levels.insert(attester_did.clone(), 2u8);
-let aquafier = Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(levels)));
+let aquafier = Aquafier::builder()
+    .trust_store(Arc::new(DefaultTrustStore::new(levels)))
+    .build();
 
 // "untrusted" — trust store present but attester not in it
-let aquafier = Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())));
+let aquafier = Aquafier::builder()
+    .trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
+    .build();
 
 // No trust store at all → wasm_outputs is always empty (no state produced).
 ```
@@ -114,14 +124,28 @@ let aquafier = Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(
 
 ## Headless Attestation (A1)
 
-Structurally identical to a normal attestation, but the genesis anchor links to
-a hash that does not exist in any tree. The verifier cannot resolve the anchor →
-structural failure → `is_valid = false`, `wasm_outputs` empty.
+The genesis anchor links to `RevisionLink::zero()` — a 32-byte zero sentinel.
+Structural validation recognises this sentinel and passes (with an Info log).
+WASM then runs, calls `ctx_linked_tree_count()` → 0, and returns state 0
+("headless"). The chain is structurally valid (`is_valid = true`); "headless"
+is a semantic state, not a structural failure.
 
 ```rust
-let attest = Attestation { context: "headless".to_string(), signer_did: attester_did.to_string(), ..Default::default() };
+let attest = Attestation {
+    context: "headless".to_string(),
+    signer_did: attester_did.to_string(),
+    valid_from: None,
+    valid_until: None,
+};
 let headless = aquafier.identity().headless_attestation(attest, Some(Method::Scalar))?;
-// Detection: !result.is_valid && result.wasm_outputs.is_empty()
+
+// Verify — no linked trees
+let wrapper = AquaTreeWrapper::new(headless, None, None);
+let (result, _) = aquafier
+    .verify_and_build_state_with_linked_trees(wrapper, vec![], vec![])
+    .await?;
+// result.is_valid == true (chain intact)
+// wasm_outputs → { "state": "headless", "state_index": 0 }
 ```
 
 Or equivalently with an explicit zero link:

@@ -56,9 +56,8 @@ use aqua_rs_sdk::{
         tree::Tree,
         AquaTreeWrapper, SigningCredentials,
     },
-    Aquafier,
+    Aquafier, DefaultTrustStore,
 };
-use aqua_rs_sdk::core::host::trust_store::DefaultTrustStore;
 
 use crate::simulation::builders;
 use crate::simulation::keygen;
@@ -263,11 +262,7 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
                 "display_name": "@alice-chen-dev",
                 "email": "alice@devmail.com",
                 "proof_url": "https://gist.github.com/alice-chen-dev/aqua-proof",
-                "profile_url": "https://github.com/alice-chen-dev",
-                "avatar_url": null,
-                "valid_from": null,
-                "valid_until": null,
-                "metadata": null
+                "profile_url": "https://github.com/alice-chen-dev"
             }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
@@ -314,9 +309,7 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
             let tree = build_claim_raw(&aq, "0x6489c5a615615128cc0da08e175b6faaaafe64f9692f67cc7c04849451964cfa", serde_json::json!({
                 "signer_did": alice_did,
                 "email": "alice@devmail.com",
-                "display_name": "Alice Chen",
-                "valid_from": null,
-                "valid_until": null
+                "display_name": "Alice Chen"
             }))?;
             let tree = self_sign_ed25519(&aq, tree, &alice_priv).await?;
             let tree_c = tree.clone();
@@ -360,13 +353,8 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
                 "signer_did": alice_did,
                 "given_name": "Alice",
                 "family_name": "Chen",
-                "middle_name": null,
-                "name_prefix": null,
-                "name_suffix": null,
                 "nickname": "ali",
-                "preferred_username": "alice-chen-dev",
-                "valid_from": null,
-                "valid_until": null
+                "preferred_username": "alice-chen-dev"
             }))?;
             let tree = self_sign_ed25519(&aq, tree, &alice_priv).await?;
             let tree_c = tree.clone();
@@ -431,13 +419,7 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
                 "provider": "google",
                 "provider_id": "109283471823456789",
                 "display_name": "Bob Martinez",
-                "email": "bobmartinez@gmail.com",
-                "proof_url": null,
-                "profile_url": null,
-                "avatar_url": null,
-                "valid_from": null,
-                "valid_until": null,
-                "metadata": null
+                "email": "bobmartinez@gmail.com"
             }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
@@ -485,7 +467,6 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
                 "signer_did": bob_did,
                 "phone_number": "+34 612 345 678",
                 "display_name": "Bob Martinez",
-                "valid_from": null,
                 "valid_until": 1000
             }))?;
             let obj_hash = tree
@@ -537,8 +518,7 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
                 "country": "ES",
                 "region": "Community of Madrid",
                 "postal_code": "28013",
-                "valid_from": 9_999_999_999u64,
-                "valid_until": null
+                "valid_from": 9_999_999_999u64
             }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
@@ -605,10 +585,7 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
             let tree = build_claim_raw(&aq, "0x5f2a0876d5192fd3089d2f9bbfeecc1f0c12792deafc1664ecd52cee5db75826", serde_json::json!({
                 "signer_did": claire_did,
                 "domain_name": "claire-dubois.press",
-                "proof_url": "https://claire-dubois.press/.well-known/aqua-proof.txt",
-                "valid_from": null,
-                "valid_until": null,
-                "metadata": null
+                "proof_url": "https://claire-dubois.press/.well-known/aqua-proof.txt"
             }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
@@ -658,28 +635,11 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
                 "document_number": "09FG228174",
                 "given_name": "Claire",
                 "family_name": "Dubois",
-                "middle_name": null,
                 "nationality": "FR",
                 "issuing_authority": "Préfecture de Police de Paris",
                 "issuing_country": "FR",
-                "issue_date": null,
-                "expiry_date": null,
                 "birth_year": 1985,
-                "birth_month": null,
-                "birth_day": null,
-                "birthplace": "Lyon, France",
-                "sex": null,
-                "portrait_hash": null,
-                "personal_id_number": null,
-                "height_cm": null,
-                "eye_colour": null,
-                "street_address": null,
-                "locality": null,
-                "region": null,
-                "postal_code": null,
-                "country": null,
-                "valid_from": null,
-                "valid_until": null
+                "birthplace": "Lyon, France"
             }))?;
             let tree = self_sign_ed25519(&aq, tree, &claire_priv).await?;
             let tree_c = tree.clone();
@@ -725,7 +685,6 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
                 "birth_month": 3,
                 "birth_day": 14,
                 "birthplace": "Lyon, France",
-                "valid_from": null,
                 "valid_until": 1000
             }))?;
             let obj_hash = tree
@@ -796,9 +755,7 @@ pub async fn persona_david() -> Vec<PersonaResult> {
                 "signer_did": david_did,
                 "age_over_18": true,
                 "age_over_21": false,
-                "age_in_years": 24,
-                "valid_from": null,
-                "valid_until": null
+                "age_in_years": 24
             }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
@@ -849,28 +806,11 @@ pub async fn persona_david() -> Vec<PersonaResult> {
                 "document_number": "KR-DL-20190834",
                 "given_name": "David",
                 "family_name": "Kim",
-                "middle_name": null,
                 "nationality": "KR",
                 "issuing_authority": "Seoul Metropolitan Police Agency",
                 "issuing_country": "KR",
-                "issue_date": null,
-                "expiry_date": null,
                 "birth_year": 2000,
-                "birth_month": null,
-                "birth_day": null,
-                "birthplace": null,
-                "sex": null,
-                "portrait_hash": null,
-                "personal_id_number": null,
-                "height_cm": 175,
-                "eye_colour": null,
-                "street_address": null,
-                "locality": null,
-                "region": null,
-                "postal_code": null,
-                "country": null,
-                "valid_from": null,
-                "valid_until": null
+                "height_cm": 175
             }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
@@ -921,28 +861,10 @@ pub async fn persona_david() -> Vec<PersonaResult> {
                 "document_number": "KR-NID-900210-1234567",
                 "given_name": "David",
                 "family_name": "Kim",
-                "middle_name": null,
                 "nationality": "KR",
                 "issuing_authority": "Ministry of the Interior, Republic of Korea",
                 "issuing_country": "KR",
-                "issue_date": null,
-                "expiry_date": null,
-                "birth_year": 2000,
-                "birth_month": null,
-                "birth_day": null,
-                "birthplace": null,
-                "sex": null,
-                "portrait_hash": null,
-                "personal_id_number": null,
-                "height_cm": null,
-                "eye_colour": null,
-                "street_address": null,
-                "locality": null,
-                "region": null,
-                "postal_code": null,
-                "country": null,
-                "valid_from": null,
-                "valid_until": null
+                "birth_year": 2000
             }))?;
             let tree = self_sign_p256(&aq, tree, &david_priv).await?;
             let tree_c = tree.clone();
@@ -1010,11 +932,7 @@ pub async fn persona_eve() -> Vec<PersonaResult> {
                 "provider": "linkedin",
                 "provider_id": "eve-okafor-7b8a2",
                 "display_name": "Eve Okafor",
-                "email": "eve@okafor.ventures",
-                "proof_url": null,
-                "valid_from": null,
-                "valid_until": null,
-                "metadata": null
+                "email": "eve@okafor.ventures"
             }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
@@ -1075,30 +993,9 @@ pub async fn persona_eve() -> Vec<PersonaResult> {
                 "signer_did": eve_did,
                 "document_type": "certificate",
                 "document_number": "RC-NGR-2024-0183847",
-                "given_name": null,
-                "family_name": null,
-                "middle_name": null,
                 "nationality": "NG",
                 "issuing_authority": "Corporate Affairs Commission Nigeria",
-                "issuing_country": "NG",
-                "issue_date": null,
-                "expiry_date": null,
-                "birth_year": null,
-                "birth_month": null,
-                "birth_day": null,
-                "birthplace": null,
-                "sex": null,
-                "portrait_hash": null,
-                "personal_id_number": null,
-                "height_cm": null,
-                "eye_colour": null,
-                "street_address": null,
-                "locality": null,
-                "region": null,
-                "postal_code": null,
-                "country": null,
-                "valid_from": null,
-                "valid_until": null
+                "issuing_country": "NG"
             }))?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
