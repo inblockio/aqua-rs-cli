@@ -6,3 +6,4 @@ keys.json
 *.aqua.json
 *.log
 credentials.json
+*.db

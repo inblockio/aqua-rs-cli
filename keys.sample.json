@@ -1,6 +1,10 @@
 {
-    "mnemonic": "hidden excite anxiety language enrich eagle rough furnace fluid auto inherit surround hill index void struggle usual program actress pluck demise kite state car",
-    
-    "nostr_sk": "sample",
-    "did:key": "sample"
+    "signing": {
+        "mnemonic": "<BIP39 mnemonic phrase - 12 or 24 words, used for --sign-type cli>",
+        "did_key": "<32-byte Ed25519 private key as hex, used for --sign-type did. Generate: openssl rand -hex 32>",
+        "p256_key": "<32-byte P-256 private key as hex, used for --sign-type p256. Generate: openssl rand -hex 32>"
+    },
+    "timestamp": {
+        "nostr_sk": "<Nostr secret key as hex or nsec bech32, used for --witness-nostr. Generate: openssl rand -hex 32>"
+    }
 }
