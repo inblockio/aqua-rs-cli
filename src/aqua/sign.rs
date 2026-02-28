@@ -10,7 +10,7 @@ use aqua_rs_sdk::Aquafier;
 use crate::{
     models::{CliArgs, SignType},
     utils::{
-        format_method_error, oprataion_logs_and_dumps, parse_evm_chain, read_credentials,
+        format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials,
         save_page_data,
     },
 };
@@ -107,8 +107,8 @@ pub(crate) async fn cli_sign_chain(
         }
         SignType::Metamask => {
             let network_str = std::env::var("aqua_network").unwrap_or("sepolia".to_string());
-            let evm_chain = parse_evm_chain(&network_str);
-            SigningCredentials::Metamask { evm_chain }
+            let eth_network = parse_eth_network(&network_str);
+            SigningCredentials::Metamask { eth_network }
         }
     };
 

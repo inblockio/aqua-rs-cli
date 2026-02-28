@@ -74,11 +74,7 @@ pub fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
                     let file_data =
                         FileData::new(file_name.to_string(), file_content, file_path.clone());
 
-                    let genesis_result = if args.minimal {
-                        aquafier.create_minimal_genesis_revision(file_data, None)
-                    } else {
-                        aquafier.create_genesis_revision(file_data, None)
-                    };
+                    let genesis_result = aquafier.create_genesis_revision(file_data, None);
                     match genesis_result {
                         Ok(tree) => {
                             logs_data.push("✅ Successfully generated Aqua chain".to_string());

@@ -53,17 +53,12 @@ use std::sync::Arc;
 use aqua_rs_sdk::{
     primitives::{Method, MethodError, RevisionLink},
     schema::{
-        template::BuiltInTemplate,
-        templates::{
-            AddressClaim, AgeClaim, BirthdateClaim, DnsClaim, DocumentClaim, DriversLicenseClaim,
-            EmailClaim, GitHubClaim, GoogleClaim, NameClaim, NationalIdClaim, PassportClaim,
-            PhoneClaim, PlatformIdentityClaim,
-        },
         tree::Tree,
         AquaTreeWrapper, SigningCredentials,
     },
-    Aquafier, DefaultTrustStore,
+    Aquafier,
 };
+use aqua_rs_sdk::core::host::trust_store::DefaultTrustStore;
 
 use crate::simulation::builders;
 use crate::simulation::keygen;
@@ -98,28 +93,36 @@ pub struct PersonaResult {
 fn trust_one(did: &str) -> Aquafier {
     let mut map = HashMap::new();
     map.insert(did.to_string(), 2u8);
-    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(map)))
+    Aquafier::builder()
+        .trust_store(Arc::new(DefaultTrustStore::new(map)))
+        .build()
 }
 
 /// Build an `Aquafier` with an explicit but empty trust store.
 ///
 /// Trust store presence (even empty) triggers WASM execution.
 fn no_trust() -> Aquafier {
-    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
+    Aquafier::builder()
+        .trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
+        .build()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Claim tree helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Build a genesis claim tree for any `BuiltInTemplate` payload.
-fn build_claim<T: serde::Serialize + BuiltInTemplate>(
+/// Build a genesis claim tree from a raw template hash string and JSON payload.
+fn build_claim_raw(
     aq: &Aquafier,
-    payload: T,
+    template_hash: &str,
+    payload: serde_json::Value,
 ) -> Result<Tree, MethodError> {
-    let link = RevisionLink::from_bytes(T::TEMPLATE_LINK);
-    let value = serde_json::to_value(&payload)?;
-    aq.create_object(link, None, value, Some(Method::Scalar))
+    let link: RevisionLink = template_hash
+        .parse()
+        .map_err(|e: <RevisionLink as std::str::FromStr>::Err| {
+            MethodError::Simple(format!("invalid template hash: {}", e))
+        })?;
+    aq.create_object(link, None, payload, Some(Method::Scalar))
 }
 
 /// Normal (tip-appended) Ed25519 signature.
@@ -251,22 +254,21 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
         const DESC: &str = "Alice's GitHub identity — org-attested";
 
         let aq = trust_one(&org_did);
-        let payload = GitHubClaim {
-            signer_did: alice_did.clone(),
-            provider: "github".to_string(),
-            provider_id: "8821034".to_string(),
-            display_name: "@alice-chen-dev".to_string(),
-            email: Some("alice@devmail.com".to_string()),
-            proof_url: Some("https://gist.github.com/alice-chen-dev/aqua-proof".to_string()),
-            profile_url: Some("https://github.com/alice-chen-dev".to_string()),
-            avatar_url: None,
-            valid_from: None,
-            valid_until: None,
-            metadata: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x44416d64213f54cd25c0d0cb72e2a58a358dab83ee584a74c6a89f33e454aae8", serde_json::json!({
+                "signer_did": alice_did,
+                "provider": "github",
+                "provider_id": "8821034",
+                "display_name": "@alice-chen-dev",
+                "email": "alice@devmail.com",
+                "proof_url": "https://gist.github.com/alice-chen-dev/aqua-proof",
+                "profile_url": "https://github.com/alice-chen-dev",
+                "avatar_url": null,
+                "valid_from": null,
+                "valid_until": null,
+                "metadata": null
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -307,16 +309,15 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
         const DESC: &str = "Alice's verified email — self-signed";
 
         let aq = no_trust();
-        let payload = EmailClaim {
-            signer_did: alice_did.clone(),
-            email: "alice@devmail.com".to_string(),
-            display_name: Some("Alice Chen".to_string()),
-            valid_from: None,
-            valid_until: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x6489c5a615615128cc0da08e175b6faaaafe64f9692f67cc7c04849451964cfa", serde_json::json!({
+                "signer_did": alice_did,
+                "email": "alice@devmail.com",
+                "display_name": "Alice Chen",
+                "valid_from": null,
+                "valid_until": null
+            }))?;
             let tree = self_sign_ed25519(&aq, tree, &alice_priv).await?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
@@ -353,21 +354,20 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
         const DESC: &str = "Alice's legal name — self-signed";
 
         let aq = no_trust();
-        let payload = NameClaim {
-            signer_did: alice_did.clone(),
-            given_name: "Alice".to_string(),
-            family_name: "Chen".to_string(),
-            middle_name: None,
-            name_prefix: None,
-            name_suffix: None,
-            nickname: Some("ali".to_string()),
-            preferred_username: Some("alice-chen-dev".to_string()),
-            valid_from: None,
-            valid_until: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0xb8aeaca00ee15ddf6037f3ea9b4138edbd517fbf905e40b56cf7a9810fc87706", serde_json::json!({
+                "signer_did": alice_did,
+                "given_name": "Alice",
+                "family_name": "Chen",
+                "middle_name": null,
+                "name_prefix": null,
+                "name_suffix": null,
+                "nickname": "ali",
+                "preferred_username": "alice-chen-dev",
+                "valid_from": null,
+                "valid_until": null
+            }))?;
             let tree = self_sign_ed25519(&aq, tree, &alice_priv).await?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
@@ -424,22 +424,21 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
         const DESC: &str = "Bob's Google account — org-attested";
 
         let aq = trust_one(&org_did);
-        let payload = GoogleClaim {
-            signer_did: bob_did.clone(),
-            provider: "google".to_string(),
-            provider_id: "109283471823456789".to_string(),
-            display_name: "Bob Martinez".to_string(),
-            email: Some("bobmartinez@gmail.com".to_string()),
-            proof_url: None,
-            profile_url: None,
-            avatar_url: None,
-            valid_from: None,
-            valid_until: None,
-            metadata: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x7d4f2b845f33c819dfdfbc86c0d3304e3f1a387a34742d495b23864308df11fd", serde_json::json!({
+                "signer_did": bob_did,
+                "provider": "google",
+                "provider_id": "109283471823456789",
+                "display_name": "Bob Martinez",
+                "email": "bobmartinez@gmail.com",
+                "proof_url": null,
+                "profile_url": null,
+                "avatar_url": null,
+                "valid_from": null,
+                "valid_until": null,
+                "metadata": null
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -480,16 +479,15 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
         const DESC: &str = "Bob's phone number — attestation expired (valid_until=1000)";
 
         let aq = trust_one(&org_did);
-        let payload = PhoneClaim {
-            signer_did: bob_did.clone(),
-            phone_number: "+34 612 345 678".to_string(),
-            display_name: Some("Bob Martinez".to_string()),
-            valid_from: None,
-            valid_until: Some(1000), // Unix epoch + 1000 s — far in the past
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0xe0efe33df32f17069d726ced96435f1682d9fa4a006bbecafa738b198578f58f", serde_json::json!({
+                "signer_did": bob_did,
+                "phone_number": "+34 612 345 678",
+                "display_name": "Bob Martinez",
+                "valid_from": null,
+                "valid_until": 1000
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -530,19 +528,18 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
         const DESC: &str = "Bob's new Madrid address — attestation not yet valid (valid_from far future)";
 
         let aq = trust_one(&org_did);
-        let payload = AddressClaim {
-            signer_did: bob_did.clone(),
-            street_address: "Calle Gran Vía 42, 3B".to_string(),
-            locality: "Madrid".to_string(),
-            country: "ES".to_string(),
-            region: Some("Community of Madrid".to_string()),
-            postal_code: Some("28013".to_string()),
-            valid_from: Some(9_999_999_999), // far future
-            valid_until: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x156f536a7b3d92c264eaf87a73c5b013238c843afe3fd48f334be5747b9f944b", serde_json::json!({
+                "signer_did": bob_did,
+                "street_address": "Calle Gran Vía 42, 3B",
+                "locality": "Madrid",
+                "country": "ES",
+                "region": "Community of Madrid",
+                "postal_code": "28013",
+                "valid_from": 9_999_999_999u64,
+                "valid_until": null
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -603,17 +600,16 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
         const DESC: &str = "Claire's domain ownership — org-attested";
 
         let aq = trust_one(&org_did);
-        let payload = DnsClaim {
-            signer_did: claire_did.clone(),
-            domain_name: "claire-dubois.press".to_string(),
-            proof_url: Some("https://claire-dubois.press/.well-known/aqua-proof.txt".to_string()),
-            valid_from: None,
-            valid_until: None,
-            metadata: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x5f2a0876d5192fd3089d2f9bbfeecc1f0c12792deafc1664ecd52cee5db75826", serde_json::json!({
+                "signer_did": claire_did,
+                "domain_name": "claire-dubois.press",
+                "proof_url": "https://claire-dubois.press/.well-known/aqua-proof.txt",
+                "valid_from": null,
+                "valid_until": null,
+                "metadata": null
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -654,38 +650,37 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
         const DESC: &str = "Claire's passport — self-asserted";
 
         let aq = no_trust();
-        let payload = PassportClaim {
-            signer_did: claire_did.clone(),
-            document_type: "passport".to_string(),
-            document_number: "09FG228174".to_string(),
-            given_name: Some("Claire".to_string()),
-            family_name: Some("Dubois".to_string()),
-            middle_name: None,
-            nationality: Some("FR".to_string()),
-            issuing_authority: Some("Préfecture de Police de Paris".to_string()),
-            issuing_country: Some("FR".to_string()),
-            issue_date: None,
-            expiry_date: None,
-            birth_year: Some(1985),
-            birth_month: None,
-            birth_day: None,
-            birthplace: Some("Lyon, France".to_string()),
-            sex: None,
-            portrait_hash: None,
-            personal_id_number: None,
-            height_cm: None,
-            eye_colour: None,
-            street_address: None,
-            locality: None,
-            region: None,
-            postal_code: None,
-            country: None,
-            valid_from: None,
-            valid_until: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x430053037e3e969a3e67056b991b61a46ff449aa7f6df9aea5310230bfd6f975", serde_json::json!({
+                "signer_did": claire_did,
+                "document_type": "passport",
+                "document_number": "09FG228174",
+                "given_name": "Claire",
+                "family_name": "Dubois",
+                "middle_name": null,
+                "nationality": "FR",
+                "issuing_authority": "Préfecture de Police de Paris",
+                "issuing_country": "FR",
+                "issue_date": null,
+                "expiry_date": null,
+                "birth_year": 1985,
+                "birth_month": null,
+                "birth_day": null,
+                "birthplace": "Lyon, France",
+                "sex": null,
+                "portrait_hash": null,
+                "personal_id_number": null,
+                "height_cm": null,
+                "eye_colour": null,
+                "street_address": null,
+                "locality": null,
+                "region": null,
+                "postal_code": null,
+                "country": null,
+                "valid_from": null,
+                "valid_until": null
+            }))?;
             let tree = self_sign_ed25519(&aq, tree, &claire_priv).await?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
@@ -722,18 +717,17 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
         const DESC: &str = "Claire's birthdate — trusted attestation expired";
 
         let aq = trust_one(&org_did);
-        let payload = BirthdateClaim {
-            signer_did: claire_did.clone(),
-            birth_year: 1985,
-            birth_month: Some(3),
-            birth_day: Some(14),
-            birthplace: Some("Lyon, France".to_string()),
-            valid_from: None,
-            valid_until: Some(1000), // well in the past
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0xfa0fe47cd9eaaae0d244d81548cc6a7816d7ca1be61861fb5d357d53f7a9dc72", serde_json::json!({
+                "signer_did": claire_did,
+                "birth_year": 1985,
+                "birth_month": 3,
+                "birth_day": 14,
+                "birthplace": "Lyon, France",
+                "valid_from": null,
+                "valid_until": 1000
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -796,17 +790,16 @@ pub async fn persona_david() -> Vec<PersonaResult> {
         const DESC: &str = "David is 18+ — university registrar attested";
 
         let aq = trust_one(&org_did);
-        let payload = AgeClaim {
-            signer_did: david_did.clone(),
-            age_over_18: Some(true),
-            age_over_21: Some(false),
-            age_in_years: Some(24),
-            valid_from: None,
-            valid_until: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x4ee2f1792d3aa3abb322c16acf73e6617b201c1351a109b623716cad351ea57a", serde_json::json!({
+                "signer_did": david_did,
+                "age_over_18": true,
+                "age_over_21": false,
+                "age_in_years": 24,
+                "valid_from": null,
+                "valid_until": null
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -848,38 +841,37 @@ pub async fn persona_david() -> Vec<PersonaResult> {
 
         // Empty trust store — the co-signer is not trusted
         let aq = no_trust();
-        let payload = DriversLicenseClaim {
-            signer_did: david_did.clone(),
-            document_type: "drivers_license".to_string(),
-            document_number: "KR-DL-20190834".to_string(),
-            given_name: Some("David".to_string()),
-            family_name: Some("Kim".to_string()),
-            middle_name: None,
-            nationality: Some("KR".to_string()),
-            issuing_authority: Some("Seoul Metropolitan Police Agency".to_string()),
-            issuing_country: Some("KR".to_string()),
-            issue_date: None,
-            expiry_date: None,
-            birth_year: Some(2000),
-            birth_month: None,
-            birth_day: None,
-            birthplace: None,
-            sex: None,
-            portrait_hash: None,
-            personal_id_number: None,
-            height_cm: Some(175),
-            eye_colour: None,
-            street_address: None,
-            locality: None,
-            region: None,
-            postal_code: None,
-            country: None,
-            valid_from: None,
-            valid_until: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x1abae19875ca2f3cee4b3fe65de6a93d62d9d60070339798dd87ff7effc1ae3e", serde_json::json!({
+                "signer_did": david_did,
+                "document_type": "drivers_license",
+                "document_number": "KR-DL-20190834",
+                "given_name": "David",
+                "family_name": "Kim",
+                "middle_name": null,
+                "nationality": "KR",
+                "issuing_authority": "Seoul Metropolitan Police Agency",
+                "issuing_country": "KR",
+                "issue_date": null,
+                "expiry_date": null,
+                "birth_year": 2000,
+                "birth_month": null,
+                "birth_day": null,
+                "birthplace": null,
+                "sex": null,
+                "portrait_hash": null,
+                "personal_id_number": null,
+                "height_cm": 175,
+                "eye_colour": null,
+                "street_address": null,
+                "locality": null,
+                "region": null,
+                "postal_code": null,
+                "country": null,
+                "valid_from": null,
+                "valid_until": null
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -921,38 +913,37 @@ pub async fn persona_david() -> Vec<PersonaResult> {
         const DESC: &str = "David's national ID — self-asserted";
 
         let aq = no_trust();
-        let payload = NationalIdClaim {
-            signer_did: david_did.clone(),
-            document_type: "national_id".to_string(),
-            document_number: "KR-NID-900210-1234567".to_string(),
-            given_name: Some("David".to_string()),
-            family_name: Some("Kim".to_string()),
-            middle_name: None,
-            nationality: Some("KR".to_string()),
-            issuing_authority: Some("Ministry of the Interior, Republic of Korea".to_string()),
-            issuing_country: Some("KR".to_string()),
-            issue_date: None,
-            expiry_date: None,
-            birth_year: Some(2000),
-            birth_month: None,
-            birth_day: None,
-            birthplace: None,
-            sex: None,
-            portrait_hash: None,
-            personal_id_number: None,
-            height_cm: None,
-            eye_colour: None,
-            street_address: None,
-            locality: None,
-            region: None,
-            postal_code: None,
-            country: None,
-            valid_from: None,
-            valid_until: None,
-        };
 
         let result = match async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0xa1eb7b1408027d6f9a7262ef2413374df4d0574117ec656826a4ac936b9448e2", serde_json::json!({
+                "signer_did": david_did,
+                "document_type": "national_id",
+                "document_number": "KR-NID-900210-1234567",
+                "given_name": "David",
+                "family_name": "Kim",
+                "middle_name": null,
+                "nationality": "KR",
+                "issuing_authority": "Ministry of the Interior, Republic of Korea",
+                "issuing_country": "KR",
+                "issue_date": null,
+                "expiry_date": null,
+                "birth_year": 2000,
+                "birth_month": null,
+                "birth_day": null,
+                "birthplace": null,
+                "sex": null,
+                "portrait_hash": null,
+                "personal_id_number": null,
+                "height_cm": null,
+                "eye_colour": null,
+                "street_address": null,
+                "locality": null,
+                "region": null,
+                "postal_code": null,
+                "country": null,
+                "valid_from": null,
+                "valid_until": null
+            }))?;
             let tree = self_sign_p256(&aq, tree, &david_priv).await?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
@@ -1012,22 +1003,19 @@ pub async fn persona_eve() -> Vec<PersonaResult> {
         const DESC: &str = "Eve's LinkedIn-style platform identity — self-signed";
 
         let aq = no_trust();
-        let payload = PlatformIdentityClaim {
-            signer_did: eve_did.clone(),
-            provider: "linkedin".to_string(),
-            provider_id: "eve-okafor-7b8a2".to_string(),
-            display_name: "Eve Okafor".to_string(),
-            email: Some("eve@okafor.ventures".to_string()),
-            proof_url: None,
-            profile_url: Some("https://linkedin.com/in/eve-okafor".to_string()),
-            avatar_url: None,
-            valid_from: None,
-            valid_until: None,
-            metadata: None,
-        };
 
         let build_result = async {
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x7cf1c62d746ba3788d9bf9f52f8dad8a1d514d2af3ab4c8b4024363f0f8c2c95", serde_json::json!({
+                "signer_did": eve_did,
+                "provider": "linkedin",
+                "provider_id": "eve-okafor-7b8a2",
+                "display_name": "Eve Okafor",
+                "email": "eve@okafor.ventures",
+                "proof_url": null,
+                "valid_from": null,
+                "valid_until": null,
+                "metadata": null
+            }))?;
             let obj_hash = tree
                 .get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
@@ -1080,39 +1068,38 @@ pub async fn persona_eve() -> Vec<PersonaResult> {
         const DESC: &str = "Eve's company incorporation certificate — not yet signed";
 
         let aq = no_trust();
-        let payload = DocumentClaim {
-            signer_did: eve_did.clone(),
-            document_type: "certificate".to_string(),
-            document_number: "RC-NGR-2024-0183847".to_string(),
-            given_name: None,
-            family_name: None,
-            middle_name: None,
-            nationality: Some("NG".to_string()),
-            issuing_authority: Some("Corporate Affairs Commission Nigeria".to_string()),
-            issuing_country: Some("NG".to_string()),
-            issue_date: None,
-            expiry_date: None,
-            birth_year: None,
-            birth_month: None,
-            birth_day: None,
-            birthplace: None,
-            sex: None,
-            portrait_hash: None,
-            personal_id_number: None,
-            height_cm: None,
-            eye_colour: None,
-            street_address: None,
-            locality: None,
-            region: None,
-            postal_code: None,
-            country: None,
-            valid_from: None,
-            valid_until: None,
-        };
 
         let result = match async {
             // Build but do NOT sign — exercising the `unsigned` state
-            let tree = build_claim(&aq, payload)?;
+            let tree = build_claim_raw(&aq, "0x00464537648c598b564a4a9670b0ed4000db5dc532af750680a77883352bd3d0", serde_json::json!({
+                "signer_did": eve_did,
+                "document_type": "certificate",
+                "document_number": "RC-NGR-2024-0183847",
+                "given_name": null,
+                "family_name": null,
+                "middle_name": null,
+                "nationality": "NG",
+                "issuing_authority": "Corporate Affairs Commission Nigeria",
+                "issuing_country": "NG",
+                "issue_date": null,
+                "expiry_date": null,
+                "birth_year": null,
+                "birth_month": null,
+                "birth_day": null,
+                "birthplace": null,
+                "sex": null,
+                "portrait_hash": null,
+                "personal_id_number": null,
+                "height_cm": null,
+                "eye_colour": null,
+                "street_address": null,
+                "locality": null,
+                "region": null,
+                "postal_code": null,
+                "country": null,
+                "valid_from": null,
+                "valid_until": null
+            }))?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
             Ok::<_, MethodError>((actual, raw, tree_c))

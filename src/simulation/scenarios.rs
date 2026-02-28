@@ -57,8 +57,9 @@ use std::sync::Arc;
 use aqua_rs_sdk::{
     primitives::RevisionLink,
     schema::{tree::Tree, AquaTreeWrapper},
-    Aquafier, DefaultTrustStore, VerificationResult,
+    Aquafier, VerificationResult,
 };
+use aqua_rs_sdk::core::host::trust_store::DefaultTrustStore;
 
 use crate::simulation::builders;
 use crate::simulation::keygen;
@@ -97,7 +98,9 @@ fn collect_wasm_outputs(result: &VerificationResult) -> Vec<serde_json::Value> {
 
 /// Build an `Aquafier` with the given trust store (DID → level mapping).
 fn aquafier_with_trust(levels: HashMap<String, u8>) -> Aquafier {
-    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(levels)))
+    Aquafier::builder()
+        .trust_store(Arc::new(DefaultTrustStore::new(levels)))
+        .build()
 }
 
 /// Build an `Aquafier` with an explicit (but empty) trust store.
@@ -107,7 +110,9 @@ fn aquafier_with_trust(levels: HashMap<String, u8>) -> Aquafier {
 /// *presence*, not trust store *content*. Without any trust store configuration,
 /// `wasm_outputs` is always empty regardless of the chain's signature state.
 fn aquafier_with_empty_trust() -> Aquafier {
-    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
+    Aquafier::builder()
+        .trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
+        .build()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial (contact legal@inblock.io)
 
 use aqua_rs_sdk::primitives::log::{LogData, LogType};
-use aqua_rs_sdk::primitives::EvmChain;
+use aqua_rs_sdk::primitives::EthNetwork;
 use aqua_rs_sdk::schema::credentials::CredentialsFile;
 use aqua_rs_sdk::schema::tree::Tree;
 use aqua_rs_sdk::schema::{SigningCredentials, TimestampCredentials};
@@ -126,8 +126,8 @@ pub fn save_page_data(
     };
 
     // Serialize Tree to JSON with revisions ordered from genesis to latest
-    let ordered_value = aqua_tree.to_ordered_json_value();
-    match serde_json::to_string_pretty(&ordered_value) {
+    let ordered_tree = aqua_rs_sdk::schema::tree::OrderedTree::from_tree(aqua_tree);
+    match serde_json::to_string_pretty(&ordered_tree.create_tree()) {
         Ok(json_data) => {
             // Write JSON data to the determined file path
             fs::write(&output_path, json_data).map_err(|e| e.to_string())?;
@@ -221,10 +221,10 @@ pub fn format_method_error(err: &aqua_rs_sdk::primitives::MethodError) -> Vec<St
     }
 }
 
-pub fn parse_evm_chain(network_str: &str) -> EvmChain {
+pub fn parse_eth_network(network_str: &str) -> EthNetwork {
     match network_str.to_lowercase().as_str() {
-        "mainnet" => EvmChain::Mainnet,
-        "holesky" => EvmChain::Holesky,
-        _ => EvmChain::Sepolia,
+        "mainnet" => EthNetwork::Mainnet,
+        "holesky" => EthNetwork::Holesky,
+        _ => EthNetwork::Sepolia,
     }
 }

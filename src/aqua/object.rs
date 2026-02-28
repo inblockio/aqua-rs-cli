@@ -4,10 +4,8 @@ use std::path::{Path, PathBuf};
 use aqua_rs_sdk::primitives::RevisionLink;
 use aqua_rs_sdk::schema::template::BuiltInTemplate;
 use aqua_rs_sdk::schema::templates::{
-    AccessGrant, AddressClaim, AgeClaim, AliasRegistration, Attestation, BirthdateClaim, DnsClaim,
-    DocumentClaim, DriversLicenseClaim, EmailClaim, File, GitHubClaim, GoogleClaim, IdentityBase,
-    MultiSigner, NameClaim, NationalIdClaim, PassportClaim, PhoneClaim, PlatformIdentityClaim,
-    PluginRegistration, TemplateRegistration, EvmTimestampPayload, TrustAssertion, VendorRegistration,
+    AccessGrant, AliasRegistration, Attestation, File, MultiSigner, PlatformIdentityClaim,
+    PluginRegistration, TemplateRegistration, TimestampPayload, TrustAssertion, VendorRegistration,
     WalletIdentification,
 };
 use aqua_rs_sdk::Aquafier;
@@ -29,37 +27,13 @@ fn template_link_to_revision_link(bytes: &[u8; 32]) -> RevisionLink {
 fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
     match name {
         "file" => Ok(template_link_to_revision_link(&File::TEMPLATE_LINK)),
-        // Identity hierarchy (root → depth-1 → depth-2)
-        "identity-base" => Ok(template_link_to_revision_link(&IdentityBase::TEMPLATE_LINK)),
         "attestation" => Ok(template_link_to_revision_link(&Attestation::TEMPLATE_LINK)),
         "platform-identity" => Ok(template_link_to_revision_link(
             &PlatformIdentityClaim::TEMPLATE_LINK,
         )),
-        "github-claim" => Ok(template_link_to_revision_link(&GitHubClaim::TEMPLATE_LINK)),
-        "google-claim" => Ok(template_link_to_revision_link(&GoogleClaim::TEMPLATE_LINK)),
-        "email-claim" => Ok(template_link_to_revision_link(&EmailClaim::TEMPLATE_LINK)),
-        "phone-claim" => Ok(template_link_to_revision_link(&PhoneClaim::TEMPLATE_LINK)),
-        "name-claim" => Ok(template_link_to_revision_link(&NameClaim::TEMPLATE_LINK)),
-        "dns-claim" => Ok(template_link_to_revision_link(&DnsClaim::TEMPLATE_LINK)),
-        "document-claim" => Ok(template_link_to_revision_link(&DocumentClaim::TEMPLATE_LINK)),
-        "passport-claim" => Ok(template_link_to_revision_link(&PassportClaim::TEMPLATE_LINK)),
-        "drivers-license-claim" => Ok(template_link_to_revision_link(
-            &DriversLicenseClaim::TEMPLATE_LINK,
-        )),
-        "national-id-claim" => Ok(template_link_to_revision_link(
-            &NationalIdClaim::TEMPLATE_LINK,
-        )),
-        "address-claim" => Ok(template_link_to_revision_link(&AddressClaim::TEMPLATE_LINK)),
-        "age-claim" => Ok(template_link_to_revision_link(&AgeClaim::TEMPLATE_LINK)),
-        "birthdate-claim" => Ok(template_link_to_revision_link(&BirthdateClaim::TEMPLATE_LINK)),
-        // Other built-in templates
-        "timestamp" => Ok(template_link_to_revision_link(
-            &EvmTimestampPayload::TEMPLATE_LINK,
-        )),
+        "timestamp" => Ok(template_link_to_revision_link(&TimestampPayload::TEMPLATE_LINK)),
         "multi-signer" => Ok(template_link_to_revision_link(&MultiSigner::TEMPLATE_LINK)),
-        "trust-assertion" => Ok(template_link_to_revision_link(
-            &TrustAssertion::TEMPLATE_LINK,
-        )),
+        "trust-assertion" => Ok(template_link_to_revision_link(&TrustAssertion::TEMPLATE_LINK)),
         "wallet-identification" => Ok(template_link_to_revision_link(
             &WalletIdentification::TEMPLATE_LINK,
         )),
@@ -85,37 +59,15 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
 pub(crate) fn cli_list_templates() {
     let templates: &[(&str, &[u8; 32])] = &[
         ("file", &File::TEMPLATE_LINK),
-        // Identity hierarchy
-        ("identity-base", &IdentityBase::TEMPLATE_LINK),
         ("attestation", &Attestation::TEMPLATE_LINK),
         ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK),
-        ("  github-claim", &GitHubClaim::TEMPLATE_LINK),
-        ("  google-claim", &GoogleClaim::TEMPLATE_LINK),
-        ("email-claim", &EmailClaim::TEMPLATE_LINK),
-        ("phone-claim", &PhoneClaim::TEMPLATE_LINK),
-        ("name-claim", &NameClaim::TEMPLATE_LINK),
-        ("dns-claim", &DnsClaim::TEMPLATE_LINK),
-        ("document-claim", &DocumentClaim::TEMPLATE_LINK),
-        ("  passport-claim", &PassportClaim::TEMPLATE_LINK),
-        ("  drivers-license-claim", &DriversLicenseClaim::TEMPLATE_LINK),
-        ("  national-id-claim", &NationalIdClaim::TEMPLATE_LINK),
-        ("address-claim", &AddressClaim::TEMPLATE_LINK),
-        ("age-claim", &AgeClaim::TEMPLATE_LINK),
-        ("birthdate-claim", &BirthdateClaim::TEMPLATE_LINK),
-        // Other built-in templates
-        ("timestamp", &EvmTimestampPayload::TEMPLATE_LINK),
+        ("timestamp", &TimestampPayload::TEMPLATE_LINK),
         ("multi-signer", &MultiSigner::TEMPLATE_LINK),
         ("trust-assertion", &TrustAssertion::TEMPLATE_LINK),
-        (
-            "wallet-identification",
-            &WalletIdentification::TEMPLATE_LINK,
-        ),
+        ("wallet-identification", &WalletIdentification::TEMPLATE_LINK),
         ("access-grant", &AccessGrant::TEMPLATE_LINK),
         ("vendor-registration", &VendorRegistration::TEMPLATE_LINK),
-        (
-            "template-registration",
-            &TemplateRegistration::TEMPLATE_LINK,
-        ),
+        ("template-registration", &TemplateRegistration::TEMPLATE_LINK),
         ("alias-registration", &AliasRegistration::TEMPLATE_LINK),
         ("plugin-registration", &PluginRegistration::TEMPLATE_LINK),
     ];
