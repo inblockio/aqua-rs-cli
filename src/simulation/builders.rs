@@ -27,6 +27,8 @@ pub fn build_claim_tree(
         display_name: "sim-user".to_string(),
         email: None,
         proof_url: None,
+        profile_url: None,
+        avatar_url: None,
         valid_from,
         valid_until,
         metadata: None,

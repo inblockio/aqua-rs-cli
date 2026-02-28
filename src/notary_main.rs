@@ -761,6 +761,8 @@ async fn cmd_identity(
         display_name: identity.display_name.clone(),
         email: identity.email.clone(),
         proof_url: None, // set after gist creation to avoid circular reference
+        profile_url: None,
+        avatar_url: None,
         valid_from: Some(now),
         valid_until: Some(now + one_year_secs),
         metadata: Some(serde_json::json!({ "github_username": github_username })),

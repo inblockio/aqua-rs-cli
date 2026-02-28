@@ -16,9 +16,7 @@ pub struct Sandbox {
 
 impl Sandbox {
     pub fn new() -> std::io::Result<Self> {
-        let dir = tempfile::Builder::new()
-            .prefix("aqua-sim-")
-            .tempdir()?;
+        let dir = tempfile::Builder::new().prefix("aqua-sim-").tempdir()?;
         Ok(Self { dir: Some(dir) })
     }
 

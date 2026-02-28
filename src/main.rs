@@ -419,7 +419,9 @@ async fn main() {
         }
         #[cfg(not(feature = "simulation"))]
         {
-            eprintln!("Error: --simulate requires building with `cargo build --features simulation`");
+            eprintln!(
+                "Error: --simulate requires building with `cargo build --features simulation`"
+            );
             std::process::exit(1);
         }
     }

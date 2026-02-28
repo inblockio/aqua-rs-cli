@@ -24,9 +24,9 @@
 //! The ephemeral forest is discarded when the function returns — no state
 //! is written to disk.
 
+use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use std::fs;
 
 use aqua_rs_sdk::daemon::{topological_order, EphemeralForest, EphemeralId};
 use aqua_rs_sdk::schema::tree::Tree;
@@ -41,11 +41,7 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
     println!("Building ephemeral forest from {} file(s)...", files.len());
     println!();
 
-    let ef = EphemeralForest::new(
-        EphemeralId(1),
-        "cli:session",
-        Duration::from_secs(300),
-    );
+    let ef = EphemeralForest::new(EphemeralId(1), "cli:session", Duration::from_secs(300));
 
     let mut ingested = 0usize;
     let mut failed = 0usize;
@@ -193,7 +189,13 @@ fn print_node_subtree(
     if let Some(node) = forest.get_state_node(hash) {
         let signer = node.signer.as_deref().unwrap_or("-");
         let rev_type = truncate(&node.revision_type, 12);
-        println!("{}[{}] type={} signer={}", indent, truncate(&hash.to_string(), 14), rev_type, signer);
+        println!(
+            "{}[{}] type={} signer={}",
+            indent,
+            truncate(&hash.to_string(), 14),
+            rev_type,
+            signer
+        );
         for child in forest.branches(hash) {
             let child_hash: aqua_rs_sdk::primitives::RevisionLink =
                 child.state.revision_hash.parse().unwrap();

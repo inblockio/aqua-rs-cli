@@ -68,7 +68,10 @@ pub async fn run_simulation(verbose: bool, keep: bool) {
     let pass = results.iter().filter(|r| r.passed).count();
     let fail = results.iter().filter(|r| !r.passed).count();
     let total = results.len();
-    println!("Results: {}/{} passed, {}/{} failed", pass, total, fail, total);
+    println!(
+        "Results: {}/{} passed, {}/{} failed",
+        pass, total, fail, total
+    );
     println!();
 
     // ── Keep trees for inspection ────────────────────────────────────────
