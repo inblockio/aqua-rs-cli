@@ -4,12 +4,15 @@ CLI tools to validate aqua chain.
 This project depends on [aqua-rs-sdk](https://github.com/inblockio/aqua-rs-sdk) v4.
 
 ## optional
+
+### Auditing simulation trees
+Run once to persist the files:
+cargo run --features simulation --bin aqua-cli -- --simulate --keep
+The directory path is printed — e.g. /tmp/aqua-sim-6MSEts.
+
 in your environment set the following variables.<br/>
-  1. aqua_domain="random_alphanumeric" (if none is specified one is genrated)<br/>
-  2. aqua_network="sepolia" or  "holesky" or "mainnet" (default is sepolia)<br/>
-  3. verification_platform="alchemy" or "infura" or  "self" or "none" for witnessing . self scraps the etherscan.io (avoid if possible) (optional) default is none <br/>
-  4. chain="sepolia" or "mainnet" or "holesky" for witnessing  (optional) default is none<br/>
-  5. api_key=  the alchemy key or infura api key (optional)<br/>
+
+If you use eth-timestamping you'll need to set a verification_platform="alchemy" or "infura" api_key=  the alchemy key or infura api key (optional)<br/>
   6. keys_file = path to json file with similar contents as thos in keys.sample.json use a wallet without metemask<br/>
 <br/>
 Notes : if a keys file is speciefied in the commands it will take precendence over the environment  valriables specified keys file

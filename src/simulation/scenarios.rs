@@ -56,7 +56,7 @@ use std::sync::Arc;
 
 use aqua_rs_sdk::{
     primitives::RevisionLink,
-    schema::{AquaTreeWrapper, tree::Tree},
+    schema::{tree::Tree, AquaTreeWrapper},
     Aquafier, DefaultTrustStore, VerificationResult,
 };
 
@@ -97,8 +97,7 @@ fn collect_wasm_outputs(result: &VerificationResult) -> Vec<serde_json::Value> {
 
 /// Build an `Aquafier` with the given trust store (DID → level mapping).
 fn aquafier_with_trust(levels: HashMap<String, u8>) -> Aquafier {
-    let store = DefaultTrustStore::new(levels);
-    Aquafier::builder().trust_store(Arc::new(store)).build()
+    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(levels)))
 }
 
 /// Build an `Aquafier` with an explicit (but empty) trust store.
@@ -108,8 +107,7 @@ fn aquafier_with_trust(levels: HashMap<String, u8>) -> Aquafier {
 /// *presence*, not trust store *content*. Without any trust store configuration,
 /// `wasm_outputs` is always empty regardless of the chain's signature state.
 fn aquafier_with_empty_trust() -> Aquafier {
-    let store = DefaultTrustStore::new(HashMap::new());
-    Aquafier::builder().trust_store(Arc::new(store)).build()
+    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,7 +124,14 @@ pub async fn c1_unsigned() -> ScenarioResult {
 
     let tree = match builders::build_claim_tree(&aq, &claimer_did, None, None) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — unsigned (no signature)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — unsigned (no signature)",
+                expected,
+                e,
+            )
+        }
     };
 
     let tree_copy = tree.clone();
@@ -139,16 +144,23 @@ pub async fn c1_unsigned() -> ScenarioResult {
             ScenarioResult {
                 id,
                 description: "PlatformIdentityClaim — unsigned (no signature, empty trust store)",
-                expected_state: expected, actual_state: actual, passed,
-                error: None, friction: vec![
+                expected_state: expected,
+                actual_state: actual,
+                passed,
+                error: None,
+                friction: vec![
                     "WASM only runs when trust store is configured on Aquafier (even if empty)",
-                    "No Aquafier::create_identity_claim() without `identity` feature",
                 ],
                 raw_wasm_outputs: raw,
                 trees: vec![(format!("{}_claim", id), tree_copy)],
             }
         }
-        Err(e) => err_result(id, "PlatformIdentityClaim — unsigned (no signature)", expected, e),
+        Err(e) => err_result(
+            id,
+            "PlatformIdentityClaim — unsigned (no signature)",
+            expected,
+            e,
+        ),
     }
 }
 
@@ -167,12 +179,25 @@ pub async fn c2_self_signed() -> ScenarioResult {
     };
     let signed = match builders::sign_p256(&aq, tree, &claimer_priv).await {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — self_signed (sign failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — self_signed (sign failed)",
+                expected,
+                e,
+            )
+        }
     };
 
-    verify_claim(id, "PlatformIdentityClaim — self_signed (claimer signs, empty trust store)", expected, signed, aq, vec![
-        "WASM only runs when trust store is configured on Aquafier (even if empty)",
-    ]).await
+    verify_claim(
+        id,
+        "PlatformIdentityClaim — self_signed (claimer signs, empty trust store)",
+        expected,
+        signed,
+        aq,
+        vec!["WASM only runs when trust store is configured on Aquafier (even if empty)"],
+    )
+    .await
 }
 
 /// C3 — `untrusted`: two-tree model — claim (self-signed) + attestation (signed, not trusted).
@@ -196,18 +221,44 @@ pub async fn c3_untrusted() -> ScenarioResult {
     let (claim_tree, claim_obj_hash, claim_sig_hash) =
         match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
             Ok(t) => t,
-            Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (claim build failed)", expected, e),
+            Err(e) => {
+                return err_result(
+                    id,
+                    "PlatformIdentityClaim — untrusted (claim build failed)",
+                    expected,
+                    e,
+                )
+            }
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        None,
+        None,
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — untrusted (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_ed25519(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — untrusted (attest sign failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — untrusted (attest sign failed)",
+                expected,
+                e,
+            )
+        }
     };
 
     verify_attestation(id, "PlatformIdentityClaim — untrusted (two-tree: signed attestation, attester not in trust store)", expected, signed, claim_tree, aq, vec![
@@ -232,23 +283,58 @@ pub async fn c4_attested() -> ScenarioResult {
     let (claim_tree, claim_obj_hash, claim_sig_hash) =
         match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
             Ok(t) => t,
-            Err(e) => return err_result(id, "PlatformIdentityClaim — attested (claim build failed)", expected, e),
+            Err(e) => {
+                return err_result(
+                    id,
+                    "PlatformIdentityClaim — attested (claim build failed)",
+                    expected,
+                    e,
+                )
+            }
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        None,
+        None,
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — attested (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — attested (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_p256(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — attested (attest sign failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — attested (attest sign failed)",
+                expected,
+                e,
+            )
+        }
     };
 
-    verify_attestation(id, "PlatformIdentityClaim — attested (two-tree: trusted attestation, level 2)", expected, signed, claim_tree, aq, vec![
+    verify_attestation(
+        id,
+        "PlatformIdentityClaim — attested (two-tree: trusted attestation, level 2)",
+        expected,
+        signed,
+        claim_tree,
+        aq,
+        vec![
         "Claim trust states use the two-tree model: verify attestation with claim as linked tree",
-    ]).await
+    ],
+    )
+    .await
 }
 
 /// C5 — `expired`: two-tree model — trusted attestation but `valid_until=1000` (past) on attestation.
@@ -265,21 +351,56 @@ pub async fn c5_expired() -> ScenarioResult {
     let (claim_tree, claim_obj_hash, claim_sig_hash) =
         match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
             Ok(t) => t,
-            Err(e) => return err_result(id, "PlatformIdentityClaim — expired (claim build failed)", expected, e),
+            Err(e) => {
+                return err_result(
+                    id,
+                    "PlatformIdentityClaim — expired (claim build failed)",
+                    expected,
+                    e,
+                )
+            }
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, Some(1000),
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        None,
+        Some(1000),
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — expired (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — expired (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_ed25519(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — expired (attest sign failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — expired (attest sign failed)",
+                expected,
+                e,
+            )
+        }
     };
 
-    verify_attestation(id, "PlatformIdentityClaim — expired (two-tree: attestation valid_until=1000)", expected, signed, claim_tree, aq, vec![]).await
+    verify_attestation(
+        id,
+        "PlatformIdentityClaim — expired (two-tree: attestation valid_until=1000)",
+        expected,
+        signed,
+        claim_tree,
+        aq,
+        vec![],
+    )
+    .await
 }
 
 /// C6 — `not_yet_valid`: two-tree model — trusted attestation with `valid_from=9999999999` (future).
@@ -296,36 +417,70 @@ pub async fn c6_not_yet_valid() -> ScenarioResult {
     let (claim_tree, claim_obj_hash, claim_sig_hash) =
         match build_self_signed_claim(&aq, &claimer_did, &claimer_priv, None, None).await {
             Ok(t) => t,
-            Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (claim build failed)", expected, e),
+            Err(e) => {
+                return err_result(
+                    id,
+                    "PlatformIdentityClaim — not_yet_valid (claim build failed)",
+                    expected,
+                    e,
+                )
+            }
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), Some(9_999_999_999), None,
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        Some(9_999_999_999),
+        None,
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — not_yet_valid (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_p256(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
-        Err(e) => return err_result(id, "PlatformIdentityClaim — not_yet_valid (attest sign failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "PlatformIdentityClaim — not_yet_valid (attest sign failed)",
+                expected,
+                e,
+            )
+        }
     };
 
-    verify_attestation(id, "PlatformIdentityClaim — not_yet_valid (two-tree: attestation valid_from=9999999999)", expected, signed, claim_tree, aq, vec![]).await
+    verify_attestation(
+        id,
+        "PlatformIdentityClaim — not_yet_valid (two-tree: attestation valid_from=9999999999)",
+        expected,
+        signed,
+        claim_tree,
+        aq,
+        vec![],
+    )
+    .await
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Attestation scenarios (A1–A6)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// A1 — `headless`: attestation anchor points to a nonexistent hash.
+/// A1 — `headless`: attestation genesis anchor points to a zero-hash sentinel (no linked claim).
 ///
-/// "headless" is a **structural state**, not a WASM-reported state.
-/// `attestation_verify.wat` declares state 0 as "headless" but marks it
-/// "unreachable in V1" — the WASM never returns 0 itself.  Instead, when
-/// the anchor target cannot be resolved, structural validation fails at
-/// Stage 0 (`resolve_anchor_links`) and WASM execution is skipped entirely.
+/// The zero-hash sentinel in `link_verification_hashes` is now recognized by structural
+/// validation (passes Stage 0). The attestation WASM then runs and calls
+/// `ctx_linked_tree_count()`, which returns 0 (no linked trees provided), and immediately
+/// returns state 0 ("headless").
 ///
-/// Pass condition: `result.is_valid == false` with no WASM output.
+/// Pass condition: `wasm_outputs` contains state "headless" (WASM ran and reported it).
 pub async fn a1_headless() -> ScenarioResult {
     let id = "A1";
     let expected = "headless";
@@ -334,33 +489,46 @@ pub async fn a1_headless() -> ScenarioResult {
 
     let headless_tree = match builders::build_headless_attestation_tree(&aq, &attester_did) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — headless (anchor → nonexistent hash)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "Attestation — headless (zero-hash sentinel anchor)",
+                expected,
+                e,
+            )
+        }
     };
 
     let tree_copy = headless_tree.clone();
     let wrapper = AquaTreeWrapper::new(headless_tree, None, None);
-    match aq.verify_and_build_state_with_linked_trees(wrapper, vec![], vec![]).await {
+    match aq
+        .verify_and_build_state_with_linked_trees(wrapper, vec![], vec![])
+        .await
+    {
         Ok((result, _nodes)) => {
             let raw = collect_wasm_outputs(&result);
-            // "headless" = structural failure: anchor target not in linked trees,
-            // WASM never runs, wasm_outputs is empty, is_valid is false.
-            let is_headless = !result.is_valid && raw.is_empty();
-            let actual_state = if is_headless { Some("headless".to_string()) } else { extract_state(&result) };
+            // "headless" = WASM-reported state 0: ctx_linked_tree_count() == 0.
+            // The chain itself is structurally valid (zero-hash passes Stage 0);
+            // headless is a semantic state, not a structural failure.
+            let actual_state = extract_state(&result);
             let passed = actual_state.as_deref() == Some(expected);
             ScenarioResult {
-                id, description: "Attestation — headless (anchor → nonexistent hash, structural failure)",
+                id, description: "Attestation — headless (zero-hash genesis anchor, no linked claim)",
                 expected_state: expected, actual_state, passed,
                 error: None, friction: vec![
-                    "headless is a structural state: WASM never runs, detected via !is_valid + empty wasm_outputs",
-                    "attestation_verify.wat declares state 0 = headless but marks it 'unreachable in V1'",
-                    "No public API for creating an anchor with arbitrary target hash; \
-                     requires schema::Anchor + verification::Linkable + manual Tree mutation",
+                    "zero-hash anchor (RevisionLink::zero()) passes structural validation as a sentinel",
+                    "WASM runs and returns state 0 (headless) when ctx_linked_tree_count() == 0",
                 ],
                 raw_wasm_outputs: raw,
                 trees: vec![(format!("{}_attestation_headless", id), tree_copy)],
             }
         }
-        Err(e) => err_result(id, "Attestation — headless (anchor → nonexistent hash)", expected, e),
+        Err(e) => err_result(
+            id,
+            "Attestation — headless (zero-hash sentinel anchor)",
+            expected,
+            e,
+        ),
     }
 }
 
@@ -379,14 +547,35 @@ pub async fn a2_unsigned() -> ScenarioResult {
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        None,
+        None,
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — unsigned (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "Attestation — unsigned (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     // No signing — attestation is unsigned.
 
-    verify_attestation(id, "Attestation — unsigned (genesis anchor → claim sig, no attester sig)", expected, attest_tree, claim_tree, aq, vec![]).await
+    verify_attestation(
+        id,
+        "Attestation — unsigned (genesis anchor → claim sig, no attester sig)",
+        expected,
+        attest_tree,
+        claim_tree,
+        aq,
+        vec![],
+    )
+    .await
 }
 
 /// A3 — `untrusted`: attester signed but NOT in trust store.
@@ -411,19 +600,38 @@ pub async fn a3_untrusted() -> ScenarioResult {
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        None,
+        None,
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — untrusted (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "Attestation — untrusted (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_ed25519(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — untrusted (sign failed)", expected, e),
     };
 
-    verify_attestation(id, "Attestation — untrusted (genesis anchor → claim sig, attester not in trust store)", expected, signed, claim_tree, aq, vec![
-        "Genesis anchor carries claim_sig_hash; no trailing anchor needed",
-    ]).await
+    verify_attestation(
+        id,
+        "Attestation — untrusted (genesis anchor → claim sig, attester not in trust store)",
+        expected,
+        signed,
+        claim_tree,
+        aq,
+        vec!["Genesis anchor carries claim_sig_hash; no trailing anchor needed"],
+    )
+    .await
 }
 
 /// A4 — `attested`: attester signed AND in trust store at level 2.
@@ -445,19 +653,38 @@ pub async fn a4_attested() -> ScenarioResult {
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        None,
+        None,
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — attested (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "Attestation — attested (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_p256(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — attested (sign failed)", expected, e),
     };
 
-    verify_attestation(id, "Attestation — attested (genesis anchor → claim sig, attester in trust store level 2)", expected, signed, claim_tree, aq, vec![
-        "Aquafier is immutable after build; separate instances required for different trust stores",
-    ]).await
+    verify_attestation(
+        id,
+        "Attestation — attested (genesis anchor → claim sig, attester in trust store level 2)",
+        expected,
+        signed,
+        claim_tree,
+        aq,
+        vec![],
+    )
+    .await
 }
 
 /// A5 — `expired`: attested (sign before link) but attestation `valid_until` is in the past.
@@ -478,17 +705,38 @@ pub async fn a5_expired() -> ScenarioResult {
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, Some(1000),
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        None,
+        Some(1000),
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — expired (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "Attestation — expired (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_ed25519(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — expired (sign failed)", expected, e),
     };
 
-    verify_attestation(id, "Attestation — expired (genesis anchor → claim sig, valid_until=1000)", expected, signed, claim_tree, aq, vec![]).await
+    verify_attestation(
+        id,
+        "Attestation — expired (genesis anchor → claim sig, valid_until=1000)",
+        expected,
+        signed,
+        claim_tree,
+        aq,
+        vec![],
+    )
+    .await
 }
 
 /// A6 — `not_yet_valid`: attested (sign before link) but valid_from is far in the future.
@@ -509,17 +757,38 @@ pub async fn a6_not_yet_valid() -> ScenarioResult {
         };
 
     let attest_tree = match builders::build_attestation_tree(
-        &aq, &attester_did, &claim_sig_hash, &claim_obj_hash.to_string(), Some(9_999_999_999), None,
+        &aq,
+        &attester_did,
+        &claim_sig_hash,
+        &claim_obj_hash.to_string(),
+        Some(9_999_999_999),
+        None,
     ) {
         Ok(t) => t,
-        Err(e) => return err_result(id, "Attestation — not_yet_valid (attest build failed)", expected, e),
+        Err(e) => {
+            return err_result(
+                id,
+                "Attestation — not_yet_valid (attest build failed)",
+                expected,
+                e,
+            )
+        }
     };
     let signed = match builders::sign_p256(&aq, attest_tree, &attester_priv).await {
         Ok(t) => t,
         Err(e) => return err_result(id, "Attestation — not_yet_valid (sign failed)", expected, e),
     };
 
-    verify_attestation(id, "Attestation — not_yet_valid (genesis anchor → claim sig, valid_from=9999999999)", expected, signed, claim_tree, aq, vec![]).await
+    verify_attestation(
+        id,
+        "Attestation — not_yet_valid (genesis anchor → claim sig, valid_from=9999999999)",
+        expected,
+        signed,
+        claim_tree,
+        aq,
+        vec![],
+    )
+    .await
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -533,9 +802,13 @@ fn err_result(
     e: aqua_rs_sdk::primitives::MethodError,
 ) -> ScenarioResult {
     ScenarioResult {
-        id, description, expected_state,
-        actual_state: None, passed: false,
-        error: Some(e.to_string()), friction: vec![],
+        id,
+        description,
+        expected_state,
+        actual_state: None,
+        passed: false,
+        error: Some(e.to_string()),
+        friction: vec![],
         raw_wasm_outputs: vec![],
         trees: vec![],
     }
@@ -561,9 +834,9 @@ async fn build_self_signed_claim(
     // Always sign with Ed25519 for simplicity (WASM checks the attestation's
     // signature, not the claim's, for trust-level states C3-C6, A2-A6).
     let signed = builders::sign_ed25519(aq, unsigned, claimer_priv).await?;
-    let sig_hash = signed
-        .get_latest_revision_link()
-        .ok_or_else(|| aqua_rs_sdk::primitives::MethodError::Simple("empty signed claim tree".into()))?;
+    let sig_hash = signed.get_latest_revision_link().ok_or_else(|| {
+        aqua_rs_sdk::primitives::MethodError::Simple("empty signed claim tree".into())
+    })?;
     Ok((signed, obj_hash, sig_hash))
 }
 
@@ -585,15 +858,27 @@ async fn verify_claim(
             let raw = collect_wasm_outputs(&result);
             let passed = actual.as_deref() == Some(expected);
             ScenarioResult {
-                id, description, expected_state: expected, actual_state: actual,
-                passed, error: None, friction,
-                raw_wasm_outputs: raw, trees,
+                id,
+                description,
+                expected_state: expected,
+                actual_state: actual,
+                passed,
+                error: None,
+                friction,
+                raw_wasm_outputs: raw,
+                trees,
             }
         }
         Err(e) => ScenarioResult {
-            id, description, expected_state: expected, actual_state: None,
-            passed: false, error: Some(format!("verify: {e}")), friction,
-            raw_wasm_outputs: vec![], trees,
+            id,
+            description,
+            expected_state: expected,
+            actual_state: None,
+            passed: false,
+            error: Some(format!("verify: {e}")),
+            friction,
+            raw_wasm_outputs: vec![],
+            trees,
         },
     }
 }
@@ -625,15 +910,27 @@ async fn verify_attestation(
             let raw = collect_wasm_outputs(&result);
             let passed = actual.as_deref() == Some(expected);
             ScenarioResult {
-                id, description, expected_state: expected, actual_state: actual,
-                passed, error: None, friction,
-                raw_wasm_outputs: raw, trees,
+                id,
+                description,
+                expected_state: expected,
+                actual_state: actual,
+                passed,
+                error: None,
+                friction,
+                raw_wasm_outputs: raw,
+                trees,
             }
         }
         Err(e) => ScenarioResult {
-            id, description, expected_state: expected, actual_state: None,
-            passed: false, error: Some(format!("verify: {e}")), friction,
-            raw_wasm_outputs: vec![], trees,
+            id,
+            description,
+            expected_state: expected,
+            actual_state: None,
+            passed: false,
+            error: Some(format!("verify: {e}")),
+            friction,
+            raw_wasm_outputs: vec![],
+            trees,
         },
     }
 }
