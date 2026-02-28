@@ -7,7 +7,7 @@ use aqua_rs_sdk::schema::templates::{
     AccessGrant, AddressClaim, AgeClaim, AliasRegistration, Attestation, BirthdateClaim, DnsClaim,
     DocumentClaim, DriversLicenseClaim, EmailClaim, File, GitHubClaim, GoogleClaim, IdentityBase,
     MultiSigner, NameClaim, NationalIdClaim, PassportClaim, PhoneClaim, PlatformIdentityClaim,
-    PluginRegistration, TemplateRegistration, TimestampPayload, TrustAssertion, VendorRegistration,
+    PluginRegistration, TemplateRegistration, EvmTimestampPayload, TrustAssertion, VendorRegistration,
     WalletIdentification,
 };
 use aqua_rs_sdk::Aquafier;
@@ -54,7 +54,7 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
         "birthdate-claim" => Ok(template_link_to_revision_link(&BirthdateClaim::TEMPLATE_LINK)),
         // Other built-in templates
         "timestamp" => Ok(template_link_to_revision_link(
-            &TimestampPayload::TEMPLATE_LINK,
+            &EvmTimestampPayload::TEMPLATE_LINK,
         )),
         "multi-signer" => Ok(template_link_to_revision_link(&MultiSigner::TEMPLATE_LINK)),
         "trust-assertion" => Ok(template_link_to_revision_link(
@@ -103,7 +103,7 @@ pub(crate) fn cli_list_templates() {
         ("age-claim", &AgeClaim::TEMPLATE_LINK),
         ("birthdate-claim", &BirthdateClaim::TEMPLATE_LINK),
         // Other built-in templates
-        ("timestamp", &TimestampPayload::TEMPLATE_LINK),
+        ("timestamp", &EvmTimestampPayload::TEMPLATE_LINK),
         ("multi-signer", &MultiSigner::TEMPLATE_LINK),
         ("trust-assertion", &TrustAssertion::TEMPLATE_LINK),
         (

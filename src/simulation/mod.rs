@@ -17,9 +17,11 @@
 
 pub mod builders;
 pub mod keygen;
+pub mod persona_scenarios;
 pub mod sandbox;
 pub mod scenarios;
 
+use persona_scenarios::PersonaResult;
 use scenarios::ScenarioResult;
 
 /// Entry point called by `main()` when `--simulate` is passed.
@@ -151,6 +153,123 @@ fn keep_trees(results: &[ScenarioResult], _verbose: bool) {
     println!("  Inspect with:");
     println!("    jq . <file>.aqua.json");
     println!("    cargo run --features simulation -- -a <file>.aqua.json");
+    println!();
+}
+
+/// Entry point for `--simulate-personas`.
+///
+/// Runs 5 personas (15 scenarios total) covering all 15 derived identity templates.
+pub async fn run_personas_simulation(verbose: bool, keep: bool) {
+    println!("Aqua Persona Identity Simulation");
+    println!("=================================");
+    println!();
+
+    let all_results: Vec<Vec<PersonaResult>> = vec![
+        persona_scenarios::persona_alice().await,
+        persona_scenarios::persona_bob().await,
+        persona_scenarios::persona_claire().await,
+        persona_scenarios::persona_david().await,
+        persona_scenarios::persona_eve().await,
+    ];
+
+    let personas = [
+        ("P1: Alice Chen", "developer, San Francisco"),
+        ("P2: Bob Martinez", "freelance translator, Madrid"),
+        ("P3: Claire Dubois", "investigative journalist, Paris"),
+        ("P4: David Kim", "graduate student, Seoul"),
+        ("P5: Eve Okafor", "startup founder, Lagos"),
+    ];
+
+    let mut all_flat: Vec<&PersonaResult> = Vec::new();
+
+    for (group, (name, role)) in all_results.iter().zip(personas.iter()) {
+        println!("{} ({})", name, role);
+        println!("{}", "─".repeat(name.len() + role.len() + 3));
+        for r in group {
+            print_persona_result(r, verbose);
+            all_flat.push(r);
+        }
+        println!();
+    }
+
+    // ── Summary ──────────────────────────────────────────────────────────────
+    let pass = all_flat.iter().filter(|r| r.passed).count();
+    let fail = all_flat.iter().filter(|r| !r.passed).count();
+    let total = all_flat.len();
+    let sub = all_flat.iter().filter(|r| r.is_sub_condition).count();
+    println!(
+        "Results: {}/{} passed, {}/{} failed  ({} sub-condition scenarios)",
+        pass, total, fail, total, sub
+    );
+    println!();
+
+    // ── Keep trees ───────────────────────────────────────────────────────────
+    if keep {
+        keep_persona_trees(&all_results, verbose);
+    }
+}
+
+fn print_persona_result(r: &PersonaResult, verbose: bool) {
+    let status = if r.passed { "PASS" } else { "FAIL" };
+    let sub_marker = if r.is_sub_condition { " ⚠" } else { "" };
+    let actual_str = r.actual_state.as_deref().unwrap_or("(none)");
+    println!(
+        "  [{status}] {id} {ct:<22} expected={exp:<15} actual={actual}{sub}",
+        status = status,
+        id = r.scenario_id,
+        ct = r.claim_type,
+        exp = r.expected_state,
+        actual = actual_str,
+        sub = sub_marker,
+    );
+    if let Some(ref err) = r.error {
+        println!("         error: {}", err);
+    }
+    if verbose {
+        println!("         desc : {}", r.description);
+        if !r.raw_wasm_outputs.is_empty() {
+            for w in &r.raw_wasm_outputs {
+                println!("         wasm : {}", w);
+            }
+        } else {
+            println!("         wasm : (no wasm_outputs produced)");
+        }
+    }
+}
+
+fn keep_persona_trees(all_results: &[Vec<PersonaResult>], _verbose: bool) {
+    println!("Persona Tree Files");
+    println!("──────────────────");
+
+    let sandbox = match sandbox::Sandbox::new() {
+        Ok(s) => s,
+        Err(e) => {
+            println!("  ERROR: could not create sandbox: {}", e);
+            return;
+        }
+    };
+
+    let mut manifest: Vec<std::path::PathBuf> = Vec::new();
+    for group in all_results {
+        for r in group {
+            for (name, tree) in &r.trees {
+                match sandbox.write_tree(name, tree) {
+                    Ok(path) => manifest.push(path),
+                    Err(e) => println!("  ERROR writing {}: {}", name, e),
+                }
+            }
+        }
+    }
+
+    let dir = sandbox.keep();
+    println!("  {} file(s) written to:", manifest.len());
+    println!("  {}", dir.display());
+    println!();
+    for path in &manifest {
+        if let Some(name) = path.file_name() {
+            println!("    {}", name.to_string_lossy());
+        }
+    }
     println!();
 }
 

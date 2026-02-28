@@ -9,7 +9,7 @@ use aqua_rs_sdk::Aquafier;
 
 use crate::models::{CliArgs, WitnessType};
 use crate::utils::{
-    format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials,
+    format_method_error, oprataion_logs_and_dumps, parse_evm_chain, read_credentials,
     save_page_data,
 };
 
@@ -27,14 +27,23 @@ pub(crate) async fn cli_winess_chain(
     // Build TimestampCredentials based on witness_type
     let credentials: TimestampCredentials = match &witness_type {
         WitnessType::Eth => {
-            let alchemy_key = std::env::var("api_key").unwrap_or_default();
+            let api_key = std::env::var("api_key").unwrap_or_default();
             let network_str = std::env::var("aqua_network").unwrap_or("sepolia".to_string());
-            let network = parse_eth_network(&network_str);
+            let evm_chain = parse_evm_chain(&network_str);
+            // Build an Alchemy RPC URL from the api_key env var (same as before).
+            let rpc_url = if api_key.is_empty() {
+                format!("https://eth-{}.g.alchemy.com/v2/", network_str.to_lowercase())
+            } else {
+                format!(
+                    "https://eth-{}.g.alchemy.com/v2/{}",
+                    network_str.to_lowercase(),
+                    api_key
+                )
+            };
 
             if let Some(ref kf) = keys_file {
                 let creds = read_credentials(kf);
                 if let Ok(_cred_file) = creds {
-                    // Check if we have a mnemonic from the keys file
                     let key_content = fs::read_to_string(kf).unwrap_or_default();
                     let val: serde_json::Value =
                         serde_json::from_str(&key_content).unwrap_or(serde_json::Value::Null);
@@ -48,26 +57,17 @@ pub(crate) async fn cli_winess_chain(
                     if !mnemonic.is_empty() {
                         TimestampCredentials::Cli {
                             mnemonic,
-                            alchemy_key,
-                            network,
+                            rpc_url,
+                            evm_chain,
                         }
                     } else {
-                        TimestampCredentials::Metamask {
-                            alchemy_key,
-                            network,
-                        }
+                        TimestampCredentials::Metamask { evm_chain }
                     }
                 } else {
-                    TimestampCredentials::Metamask {
-                        alchemy_key,
-                        network,
-                    }
+                    TimestampCredentials::Metamask { evm_chain }
                 }
             } else {
-                TimestampCredentials::Metamask {
-                    alchemy_key,
-                    network,
-                }
+                TimestampCredentials::Metamask { evm_chain }
             }
         }
         WitnessType::Nostr => {

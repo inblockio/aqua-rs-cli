@@ -281,10 +281,16 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .help("Run the identity simulation suite — exercises all 12 PlatformIdentityClaim/Attestation WASM states (requires --features simulation)"),
         )
         .arg(
+            Arg::new("simulate-personas")
+                .long("simulate-personas")
+                .action(ArgAction::SetTrue)
+                .help("Run the persona-based identity simulation — 5 personas, 15 claim scenarios covering all derived identity templates (requires --features simulation)"),
+        )
+        .arg(
             Arg::new("keep")
                 .long("keep")
                 .action(ArgAction::SetTrue)
-                .help("Keep simulation tree files on disk for inspection (use with --simulate)"),
+                .help("Keep simulation tree files on disk for inspection (use with --simulate or --simulate-personas)"),
         )
         .group(
             ArgGroup::new("template")
@@ -292,7 +298,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas"])
                 .required(true),
         )
         .get_matches();
@@ -350,6 +356,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .get_many::<String>("forest")
         .map(|vals| vals.map(PathBuf::from).collect());
     let simulate = matches.get_flag("simulate");
+    let simulate_personas = matches.get_flag("simulate-personas");
     let keep = matches.get_flag("keep");
 
     Ok(CliArgs {
@@ -375,6 +382,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         minimal,
         forest_files,
         simulate,
+        simulate_personas,
         keep,
     })
 }
@@ -426,6 +434,21 @@ async fn main() {
         }
     }
 
+    if args.simulate_personas {
+        #[cfg(feature = "simulation")]
+        {
+            simulation::run_personas_simulation(args.verbose, args.keep).await;
+            return;
+        }
+        #[cfg(not(feature = "simulation"))]
+        {
+            eprintln!(
+                "Error: --simulate-personas requires building with `cargo build --features simulation`"
+            );
+            std::process::exit(1);
+        }
+    }
+
     if args.authenticate.is_none()
         && args.sign.is_none()
         && args.witness.is_none()
@@ -435,6 +458,7 @@ async fn main() {
         && !args.create_object
         && args.forest_files.is_none()
         && !args.simulate
+        && !args.simulate_personas
     {
         println!("{}", BASE_LONG_ABOUT);
         return;

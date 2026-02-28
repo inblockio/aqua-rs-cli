@@ -1,0 +1,1207 @@
+// Copyright (c) 2024–2026 inblock.io assets GmbH
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial (contact legal@inblock.io)
+
+//! Persona-based identity claim simulation.
+//!
+//! 5 real-world-plausible personas, each holding a portfolio of identity claims
+//! that cover all 15 derived identity templates (everything under IdentityBase,
+//! not the root itself).
+//!
+//! ## Template coverage
+//!
+//! Depth 1 (IdentityBase children):
+//!   EmailClaim, PhoneClaim, NameClaim, DnsClaim, DocumentClaim,
+//!   AddressClaim, AgeClaim, BirthdateClaim, PlatformIdentityClaim, Attestation
+//!
+//! Depth 2 (PlatformIdentity children):
+//!   GitHubClaim, GoogleClaim
+//!
+//! Depth 2 (DocumentClaim children):
+//!   PassportClaim, DriversLicenseClaim, NationalIdClaim
+//!
+//! ## WASM state architecture
+//!
+//! All non-Attestation claims inherit IdentityBase WASM and are verified standalone
+//! (`verify_and_build_state`). IdentityBase WASM scans all signature branches:
+//!
+//! - **attested**: claimer self-sig + trusted-org parallel sig (both off the object revision)
+//! - **expired**: valid_until in the past + trusted-org parallel sig
+//! - **not_yet_valid**: valid_from in the future + trusted-org parallel sig
+//! - **untrusted**: claimer self-sig + untrusted-org parallel sig (org not in trust store)
+//! - **self_signed**: claimer self-sig only
+//! - **unsigned**: no signatures
+//!
+//! Parallel sigs are added via `AquaTreeWrapper { revision: Some(obj_hash) }`,
+//! which causes `sign_aqua_tree` to branch off `obj_hash` rather than the tip.
+//!
+//! **Attestation (P5-3)** uses the two-tree model:
+//!   `verify_and_build_state_with_linked_trees(attestation, [claim], [])`
+//!
+//! ## Personas
+//!
+//! | ID  | Persona              | Claims (15 total)                            |
+//! |-----|----------------------|----------------------------------------------|
+//! | P1  | Alice Chen (dev)     | GitHubClaim, EmailClaim, NameClaim           |
+//! | P2  | Bob Martinez (free)  | GoogleClaim, PhoneClaim, AddressClaim        |
+//! | P3  | Claire Dubois (jour) | DnsClaim, PassportClaim, BirthdateClaim      |
+//! | P4  | David Kim (student)  | AgeClaim, DriversLicenseClaim, NationalIdClaim |
+//! | P5  | Eve Okafor (founder) | PlatformIdentityClaim, DocumentClaim, Attestation |
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use aqua_rs_sdk::{
+    primitives::{Method, MethodError, RevisionLink},
+    schema::{
+        template::BuiltInTemplate,
+        templates::{
+            AddressClaim, AgeClaim, BirthdateClaim, DnsClaim, DocumentClaim, DriversLicenseClaim,
+            EmailClaim, GitHubClaim, GoogleClaim, NameClaim, NationalIdClaim, PassportClaim,
+            PhoneClaim, PlatformIdentityClaim,
+        },
+        tree::Tree,
+        AquaTreeWrapper, SigningCredentials,
+    },
+    Aquafier, DefaultTrustStore,
+};
+
+use crate::simulation::builders;
+use crate::simulation::keygen;
+use crate::simulation::scenarios::extract_state;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Result type
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Result of a single persona claim scenario.
+#[derive(Debug)]
+pub struct PersonaResult {
+    pub persona: &'static str,
+    pub scenario_id: &'static str,
+    pub claim_type: &'static str,
+    pub description: &'static str,
+    pub expected_state: &'static str,
+    pub actual_state: Option<String>,
+    /// Whether this is an intentional sub-condition (expired, not_yet_valid, untrusted, unsigned).
+    pub is_sub_condition: bool,
+    pub passed: bool,
+    pub error: Option<String>,
+    pub raw_wasm_outputs: Vec<serde_json::Value>,
+    pub trees: Vec<(String, Tree)>,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aquafier factories
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Build an `Aquafier` with a single trusted DID at level 2.
+fn trust_one(did: &str) -> Aquafier {
+    let mut map = HashMap::new();
+    map.insert(did.to_string(), 2u8);
+    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(map)))
+}
+
+/// Build an `Aquafier` with an explicit but empty trust store.
+///
+/// Trust store presence (even empty) triggers WASM execution.
+fn no_trust() -> Aquafier {
+    Aquafier::new().with_trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Claim tree helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Build a genesis claim tree for any `BuiltInTemplate` payload.
+fn build_claim<T: serde::Serialize + BuiltInTemplate>(
+    aq: &Aquafier,
+    payload: T,
+) -> Result<Tree, MethodError> {
+    let link = RevisionLink::from_bytes(T::TEMPLATE_LINK);
+    let value = serde_json::to_value(&payload)?;
+    aq.create_object(link, None, value, Some(Method::Scalar))
+}
+
+/// Normal (tip-appended) Ed25519 signature.
+async fn self_sign_ed25519(aq: &Aquafier, tree: Tree, priv_key: &[u8]) -> Result<Tree, MethodError> {
+    builders::sign_ed25519(aq, tree, priv_key).await
+}
+
+/// Normal (tip-appended) P-256 signature.
+async fn self_sign_p256(aq: &Aquafier, tree: Tree, priv_key: &[u8]) -> Result<Tree, MethodError> {
+    builders::sign_p256(aq, tree, priv_key).await
+}
+
+/// Parallel Ed25519 signature branching off `target` (not the current tip).
+///
+/// Setting `AquaTreeWrapper.revision = Some(target)` causes `sign_aqua_tree` to
+/// attach the new signature as a child of `target` rather than the latest revision,
+/// creating a fork in the tree that the IdentityBase WASM can detect.
+async fn parallel_sign_ed25519(
+    aq: &Aquafier,
+    tree: Tree,
+    priv_key: &[u8],
+    target: RevisionLink,
+) -> Result<Tree, MethodError> {
+    let wrapper = AquaTreeWrapper::new(tree, None, Some(target));
+    let creds = SigningCredentials::Did {
+        did_key: priv_key.to_vec(),
+    };
+    let op = aq.sign_aqua_tree(wrapper, &creds, None, None).await?;
+    Ok(op.aqua_tree)
+}
+
+/// Parallel P-256 signature branching off `target`.
+async fn parallel_sign_p256(
+    aq: &Aquafier,
+    tree: Tree,
+    priv_key: &[u8],
+    target: RevisionLink,
+) -> Result<Tree, MethodError> {
+    let wrapper = AquaTreeWrapper::new(tree, None, Some(target));
+    let creds = SigningCredentials::P256 {
+        p256_key: priv_key.to_vec(),
+    };
+    let op = aq.sign_aqua_tree(wrapper, &creds, None, None).await?;
+    Ok(op.aqua_tree)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Verification helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Verify a standalone claim tree (IdentityBase WASM).
+async fn verify_claim(
+    aq: &Aquafier,
+    tree: Tree,
+) -> Result<(Option<String>, Vec<serde_json::Value>), MethodError> {
+    let wrapper = AquaTreeWrapper::new(tree, None, None);
+    let (result, _) = aq.verify_and_build_state(wrapper, vec![]).await?;
+    let state = extract_state(&result);
+    let raw = result.wasm_outputs.values().cloned().collect();
+    Ok((state, raw))
+}
+
+/// Verify an attestation tree with the claim provided as a linked tree (two-tree model).
+async fn verify_attestation(
+    aq: &Aquafier,
+    attest_tree: Tree,
+    claim_tree: Tree,
+) -> Result<(Option<String>, Vec<serde_json::Value>), MethodError> {
+    let attest_w = AquaTreeWrapper::new(attest_tree, None, None);
+    let claim_w = AquaTreeWrapper::new(claim_tree, None, None);
+    let (result, _) = aq
+        .verify_and_build_state_with_linked_trees(attest_w, vec![claim_w], vec![])
+        .await?;
+    let state = extract_state(&result);
+    let raw = result.wasm_outputs.values().cloned().collect();
+    Ok((state, raw))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Error constructor
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn make_err(
+    persona: &'static str,
+    scenario_id: &'static str,
+    claim_type: &'static str,
+    description: &'static str,
+    expected_state: &'static str,
+    is_sub_condition: bool,
+    e: impl std::fmt::Display,
+) -> PersonaResult {
+    PersonaResult {
+        persona,
+        scenario_id,
+        claim_type,
+        description,
+        expected_state,
+        actual_state: None,
+        is_sub_condition,
+        passed: false,
+        error: Some(e.to_string()),
+        raw_wasm_outputs: vec![],
+        trees: vec![],
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Persona 1: Alice Chen — software developer, San Francisco
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// P1: Alice Chen.
+///
+/// - P1-1 GitHubClaim   → `attested`     (org-attested via parallel trusted sig)
+/// - P1-2 EmailClaim    → `self_signed`  (Alice signs only)
+/// - P1-3 NameClaim     → `self_signed`  (Alice signs only)
+pub async fn persona_alice() -> Vec<PersonaResult> {
+    const PERSONA: &str = "P1: Alice Chen (developer, San Francisco)";
+
+    let (alice_priv, alice_did) = keygen::generate_ed25519();
+    let (org_priv, org_did) = keygen::generate_ed25519();
+
+    let mut out = Vec::new();
+
+    // --- P1-1: GitHubClaim — attested ---
+    {
+        const ID: &str = "P1-1";
+        const CT: &str = "GitHubClaim";
+        const EXP: &str = "attested";
+        const DESC: &str = "Alice's GitHub identity — org-attested";
+
+        let aq = trust_one(&org_did);
+        let payload = GitHubClaim {
+            signer_did: alice_did.clone(),
+            provider: "github".to_string(),
+            provider_id: "8821034".to_string(),
+            display_name: "@alice-chen-dev".to_string(),
+            email: Some("alice@devmail.com".to_string()),
+            proof_url: Some("https://gist.github.com/alice-chen-dev/aqua-proof".to_string()),
+            profile_url: Some("https://github.com/alice-chen-dev".to_string()),
+            avatar_url: None,
+            valid_from: None,
+            valid_until: None,
+            metadata: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_ed25519(&aq, tree, &alice_priv).await?;
+            let tree = parallel_sign_ed25519(&aq, tree, &org_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    // --- P1-2: EmailClaim — self_signed ---
+    {
+        const ID: &str = "P1-2";
+        const CT: &str = "EmailClaim";
+        const EXP: &str = "self_signed";
+        const DESC: &str = "Alice's verified email — self-signed";
+
+        let aq = no_trust();
+        let payload = EmailClaim {
+            signer_did: alice_did.clone(),
+            email: "alice@devmail.com".to_string(),
+            display_name: Some("Alice Chen".to_string()),
+            valid_from: None,
+            valid_until: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let tree = self_sign_ed25519(&aq, tree, &alice_priv).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    // --- P1-3: NameClaim — self_signed ---
+    {
+        const ID: &str = "P1-3";
+        const CT: &str = "NameClaim";
+        const EXP: &str = "self_signed";
+        const DESC: &str = "Alice's legal name — self-signed";
+
+        let aq = no_trust();
+        let payload = NameClaim {
+            signer_did: alice_did.clone(),
+            given_name: "Alice".to_string(),
+            family_name: "Chen".to_string(),
+            middle_name: None,
+            name_prefix: None,
+            name_suffix: None,
+            nickname: Some("ali".to_string()),
+            preferred_username: Some("alice-chen-dev".to_string()),
+            valid_from: None,
+            valid_until: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let tree = self_sign_ed25519(&aq, tree, &alice_priv).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Persona 2: Bob Martinez — freelance translator, Madrid
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// P2: Bob Martinez.
+///
+/// - P2-1 GoogleClaim   → `attested`       (org-attested)
+/// - P2-2 PhoneClaim    → `expired`        (valid_until=1000 + trusted sig) ⚠ sub-condition
+/// - P2-3 AddressClaim  → `not_yet_valid`  (valid_from=9999999999 + trusted sig) ⚠ sub-condition
+pub async fn persona_bob() -> Vec<PersonaResult> {
+    const PERSONA: &str = "P2: Bob Martinez (freelance translator, Madrid)";
+
+    let (bob_priv, bob_did) = keygen::generate_p256();
+    let (org_priv, org_did) = keygen::generate_p256();
+
+    let mut out = Vec::new();
+
+    // --- P2-1: GoogleClaim — attested ---
+    {
+        const ID: &str = "P2-1";
+        const CT: &str = "GoogleClaim";
+        const EXP: &str = "attested";
+        const DESC: &str = "Bob's Google account — org-attested";
+
+        let aq = trust_one(&org_did);
+        let payload = GoogleClaim {
+            signer_did: bob_did.clone(),
+            provider: "google".to_string(),
+            provider_id: "109283471823456789".to_string(),
+            display_name: "Bob Martinez".to_string(),
+            email: Some("bobmartinez@gmail.com".to_string()),
+            proof_url: None,
+            profile_url: None,
+            avatar_url: None,
+            valid_from: None,
+            valid_until: None,
+            metadata: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_p256(&aq, tree, &bob_priv).await?;
+            let tree = parallel_sign_p256(&aq, tree, &org_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    // --- P2-2: PhoneClaim — expired (sub-condition) ---
+    {
+        const ID: &str = "P2-2";
+        const CT: &str = "PhoneClaim";
+        const EXP: &str = "expired";
+        const DESC: &str = "Bob's phone number — attestation expired (valid_until=1000)";
+
+        let aq = trust_one(&org_did);
+        let payload = PhoneClaim {
+            signer_did: bob_did.clone(),
+            phone_number: "+34 612 345 678".to_string(),
+            display_name: Some("Bob Martinez".to_string()),
+            valid_from: None,
+            valid_until: Some(1000), // Unix epoch + 1000 s — far in the past
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_p256(&aq, tree, &bob_priv).await?;
+            let tree = parallel_sign_p256(&aq, tree, &org_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: true,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, true, e),
+        };
+        out.push(result);
+    }
+
+    // --- P2-3: AddressClaim — not_yet_valid (sub-condition) ---
+    {
+        const ID: &str = "P2-3";
+        const CT: &str = "AddressClaim";
+        const EXP: &str = "not_yet_valid";
+        const DESC: &str = "Bob's new Madrid address — attestation not yet valid (valid_from far future)";
+
+        let aq = trust_one(&org_did);
+        let payload = AddressClaim {
+            signer_did: bob_did.clone(),
+            street_address: "Calle Gran Vía 42, 3B".to_string(),
+            locality: "Madrid".to_string(),
+            country: "ES".to_string(),
+            region: Some("Community of Madrid".to_string()),
+            postal_code: Some("28013".to_string()),
+            valid_from: Some(9_999_999_999), // far future
+            valid_until: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_p256(&aq, tree, &bob_priv).await?;
+            let tree = parallel_sign_p256(&aq, tree, &org_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: true,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, true, e),
+        };
+        out.push(result);
+    }
+
+    out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Persona 3: Claire Dubois — investigative journalist, Paris
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// P3: Claire Dubois.
+///
+/// - P3-1 DnsClaim        → `attested`   (org-attested)
+/// - P3-2 PassportClaim   → `self_signed` (Claire signs only)
+/// - P3-3 BirthdateClaim  → `expired`    (valid_until=1000 + trusted sig) ⚠ sub-condition
+pub async fn persona_claire() -> Vec<PersonaResult> {
+    const PERSONA: &str = "P3: Claire Dubois (investigative journalist, Paris)";
+
+    let (claire_priv, claire_did) = keygen::generate_ed25519();
+    let (org_priv, org_did) = keygen::generate_ed25519();
+
+    let mut out = Vec::new();
+
+    // --- P3-1: DnsClaim — attested ---
+    {
+        const ID: &str = "P3-1";
+        const CT: &str = "DnsClaim";
+        const EXP: &str = "attested";
+        const DESC: &str = "Claire's domain ownership — org-attested";
+
+        let aq = trust_one(&org_did);
+        let payload = DnsClaim {
+            signer_did: claire_did.clone(),
+            domain_name: "claire-dubois.press".to_string(),
+            proof_url: Some("https://claire-dubois.press/.well-known/aqua-proof.txt".to_string()),
+            valid_from: None,
+            valid_until: None,
+            metadata: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_ed25519(&aq, tree, &claire_priv).await?;
+            let tree = parallel_sign_ed25519(&aq, tree, &org_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    // --- P3-2: PassportClaim — self_signed ---
+    {
+        const ID: &str = "P3-2";
+        const CT: &str = "PassportClaim";
+        const EXP: &str = "self_signed";
+        const DESC: &str = "Claire's passport — self-asserted";
+
+        let aq = no_trust();
+        let payload = PassportClaim {
+            signer_did: claire_did.clone(),
+            document_type: "passport".to_string(),
+            document_number: "09FG228174".to_string(),
+            given_name: Some("Claire".to_string()),
+            family_name: Some("Dubois".to_string()),
+            middle_name: None,
+            nationality: Some("FR".to_string()),
+            issuing_authority: Some("Préfecture de Police de Paris".to_string()),
+            issuing_country: Some("FR".to_string()),
+            issue_date: None,
+            expiry_date: None,
+            birth_year: Some(1985),
+            birth_month: None,
+            birth_day: None,
+            birthplace: Some("Lyon, France".to_string()),
+            sex: None,
+            portrait_hash: None,
+            personal_id_number: None,
+            height_cm: None,
+            eye_colour: None,
+            street_address: None,
+            locality: None,
+            region: None,
+            postal_code: None,
+            country: None,
+            valid_from: None,
+            valid_until: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let tree = self_sign_ed25519(&aq, tree, &claire_priv).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    // --- P3-3: BirthdateClaim — expired (sub-condition) ---
+    {
+        const ID: &str = "P3-3";
+        const CT: &str = "BirthdateClaim";
+        const EXP: &str = "expired";
+        const DESC: &str = "Claire's birthdate — trusted attestation expired";
+
+        let aq = trust_one(&org_did);
+        let payload = BirthdateClaim {
+            signer_did: claire_did.clone(),
+            birth_year: 1985,
+            birth_month: Some(3),
+            birth_day: Some(14),
+            birthplace: Some("Lyon, France".to_string()),
+            valid_from: None,
+            valid_until: Some(1000), // well in the past
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_ed25519(&aq, tree, &claire_priv).await?;
+            let tree = parallel_sign_ed25519(&aq, tree, &org_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: true,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, true, e),
+        };
+        out.push(result);
+    }
+
+    out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Persona 4: David Kim — graduate student, Seoul
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// P4: David Kim.
+///
+/// - P4-1 AgeClaim            → `attested`   (org-attested)
+/// - P4-2 DriversLicenseClaim → `untrusted`  (parallel sig not in trust store) ⚠ sub-condition
+/// - P4-3 NationalIdClaim     → `self_signed` (David signs only)
+pub async fn persona_david() -> Vec<PersonaResult> {
+    const PERSONA: &str = "P4: David Kim (graduate student, Seoul)";
+
+    let (david_priv, david_did) = keygen::generate_p256();
+    let (org_priv, org_did) = keygen::generate_p256();
+    // A separate untrusted party for P4-2 (not in trust store)
+    let (untrusted_priv, _untrusted_did) = keygen::generate_ed25519();
+
+    let mut out = Vec::new();
+
+    // --- P4-1: AgeClaim — attested ---
+    {
+        const ID: &str = "P4-1";
+        const CT: &str = "AgeClaim";
+        const EXP: &str = "attested";
+        const DESC: &str = "David is 18+ — university registrar attested";
+
+        let aq = trust_one(&org_did);
+        let payload = AgeClaim {
+            signer_did: david_did.clone(),
+            age_over_18: Some(true),
+            age_over_21: Some(false),
+            age_in_years: Some(24),
+            valid_from: None,
+            valid_until: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_p256(&aq, tree, &david_priv).await?;
+            let tree = parallel_sign_p256(&aq, tree, &org_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    // --- P4-2: DriversLicenseClaim — untrusted (sub-condition) ---
+    {
+        const ID: &str = "P4-2";
+        const CT: &str = "DriversLicenseClaim";
+        const EXP: &str = "untrusted";
+        const DESC: &str = "David's driver's license — co-signed by an unrecognised party";
+
+        // Empty trust store — the co-signer is not trusted
+        let aq = no_trust();
+        let payload = DriversLicenseClaim {
+            signer_did: david_did.clone(),
+            document_type: "drivers_license".to_string(),
+            document_number: "KR-DL-20190834".to_string(),
+            given_name: Some("David".to_string()),
+            family_name: Some("Kim".to_string()),
+            middle_name: None,
+            nationality: Some("KR".to_string()),
+            issuing_authority: Some("Seoul Metropolitan Police Agency".to_string()),
+            issuing_country: Some("KR".to_string()),
+            issue_date: None,
+            expiry_date: None,
+            birth_year: Some(2000),
+            birth_month: None,
+            birth_day: None,
+            birthplace: None,
+            sex: None,
+            portrait_hash: None,
+            personal_id_number: None,
+            height_cm: Some(175),
+            eye_colour: None,
+            street_address: None,
+            locality: None,
+            region: None,
+            postal_code: None,
+            country: None,
+            valid_from: None,
+            valid_until: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_p256(&aq, tree, &david_priv).await?;
+            // Untrusted co-signer (not in trust store) creates a parallel branch
+            let tree = parallel_sign_ed25519(&aq, tree, &untrusted_priv, obj_hash).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: true,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, true, e),
+        };
+        out.push(result);
+    }
+
+    // --- P4-3: NationalIdClaim — self_signed ---
+    {
+        const ID: &str = "P4-3";
+        const CT: &str = "NationalIdClaim";
+        const EXP: &str = "self_signed";
+        const DESC: &str = "David's national ID — self-asserted";
+
+        let aq = no_trust();
+        let payload = NationalIdClaim {
+            signer_did: david_did.clone(),
+            document_type: "national_id".to_string(),
+            document_number: "KR-NID-900210-1234567".to_string(),
+            given_name: Some("David".to_string()),
+            family_name: Some("Kim".to_string()),
+            middle_name: None,
+            nationality: Some("KR".to_string()),
+            issuing_authority: Some("Ministry of the Interior, Republic of Korea".to_string()),
+            issuing_country: Some("KR".to_string()),
+            issue_date: None,
+            expiry_date: None,
+            birth_year: Some(2000),
+            birth_month: None,
+            birth_day: None,
+            birthplace: None,
+            sex: None,
+            portrait_hash: None,
+            personal_id_number: None,
+            height_cm: None,
+            eye_colour: None,
+            street_address: None,
+            locality: None,
+            region: None,
+            postal_code: None,
+            country: None,
+            valid_from: None,
+            valid_until: None,
+        };
+
+        let result = match async {
+            let tree = build_claim(&aq, payload)?;
+            let tree = self_sign_p256(&aq, tree, &david_priv).await?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: false,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+        };
+        out.push(result);
+    }
+
+    out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Persona 5: Eve Okafor — startup founder, Lagos
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// P5: Eve Okafor.
+///
+/// - P5-1 PlatformIdentityClaim → `self_signed` (Eve's platform identity, self-only)
+/// - P5-2 DocumentClaim         → `unsigned`    (company reg doc, not yet signed) ⚠ sub-condition
+/// - P5-3 Attestation           → `attested`    (attests P5-1 claim, two-tree model)
+///
+/// P5-1's signed tree is reused as the linked claim in P5-3.
+pub async fn persona_eve() -> Vec<PersonaResult> {
+    const PERSONA: &str = "P5: Eve Okafor (startup founder, Lagos)";
+
+    let (eve_priv, eve_did) = keygen::generate_p256();
+    let (org_priv, org_did) = keygen::generate_ed25519();
+
+    let mut out = Vec::new();
+
+    // --- P5-1: PlatformIdentityClaim — self_signed ---
+    // Also captures claim_tree + hashes for P5-3.
+    let p5_1_claim_state: Option<(Tree, RevisionLink, RevisionLink)> = {
+        const ID: &str = "P5-1";
+        const CT: &str = "PlatformIdentityClaim";
+        const EXP: &str = "self_signed";
+        const DESC: &str = "Eve's LinkedIn-style platform identity — self-signed";
+
+        let aq = no_trust();
+        let payload = PlatformIdentityClaim {
+            signer_did: eve_did.clone(),
+            provider: "linkedin".to_string(),
+            provider_id: "eve-okafor-7b8a2".to_string(),
+            display_name: "Eve Okafor".to_string(),
+            email: Some("eve@okafor.ventures".to_string()),
+            proof_url: None,
+            profile_url: Some("https://linkedin.com/in/eve-okafor".to_string()),
+            avatar_url: None,
+            valid_from: None,
+            valid_until: None,
+            metadata: None,
+        };
+
+        let build_result = async {
+            let tree = build_claim(&aq, payload)?;
+            let obj_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
+            let tree = self_sign_p256(&aq, tree, &eve_priv).await?;
+            let sig_hash = tree
+                .get_latest_revision_link()
+                .ok_or_else(|| MethodError::Simple("empty signed tree".into()))?;
+            Ok::<_, MethodError>((tree, obj_hash, sig_hash))
+        }
+        .await;
+
+        match build_result {
+            Ok((tree, obj_hash, sig_hash)) => {
+                // Verify P5-1 as self_signed
+                let verify_result = verify_claim(&aq, tree.clone()).await;
+                let pr = match verify_result {
+                    Ok((actual, raw)) => {
+                        let passed = actual.as_deref() == Some(EXP);
+                        PersonaResult {
+                            persona: PERSONA,
+                            scenario_id: ID,
+                            claim_type: CT,
+                            description: DESC,
+                            expected_state: EXP,
+                            actual_state: actual,
+                            is_sub_condition: false,
+                            passed,
+                            error: None,
+                            raw_wasm_outputs: raw,
+                            trees: vec![(format!("{}_{}", ID, CT), tree.clone())],
+                        }
+                    }
+                    Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+                };
+                out.push(pr);
+                Some((tree, obj_hash, sig_hash))
+            }
+            Err(e) => {
+                out.push(make_err(PERSONA, ID, CT, DESC, EXP, false, e));
+                None
+            }
+        }
+    };
+
+    // --- P5-2: DocumentClaim — unsigned (sub-condition) ---
+    {
+        const ID: &str = "P5-2";
+        const CT: &str = "DocumentClaim";
+        const EXP: &str = "unsigned";
+        const DESC: &str = "Eve's company incorporation certificate — not yet signed";
+
+        let aq = no_trust();
+        let payload = DocumentClaim {
+            signer_did: eve_did.clone(),
+            document_type: "certificate".to_string(),
+            document_number: "RC-NGR-2024-0183847".to_string(),
+            given_name: None,
+            family_name: None,
+            middle_name: None,
+            nationality: Some("NG".to_string()),
+            issuing_authority: Some("Corporate Affairs Commission Nigeria".to_string()),
+            issuing_country: Some("NG".to_string()),
+            issue_date: None,
+            expiry_date: None,
+            birth_year: None,
+            birth_month: None,
+            birth_day: None,
+            birthplace: None,
+            sex: None,
+            portrait_hash: None,
+            personal_id_number: None,
+            height_cm: None,
+            eye_colour: None,
+            street_address: None,
+            locality: None,
+            region: None,
+            postal_code: None,
+            country: None,
+            valid_from: None,
+            valid_until: None,
+        };
+
+        let result = match async {
+            // Build but do NOT sign — exercising the `unsigned` state
+            let tree = build_claim(&aq, payload)?;
+            let tree_c = tree.clone();
+            let (actual, raw) = verify_claim(&aq, tree).await?;
+            Ok::<_, MethodError>((actual, raw, tree_c))
+        }
+        .await
+        {
+            Ok((actual, raw, tree_c)) => {
+                let passed = actual.as_deref() == Some(EXP);
+                PersonaResult {
+                    persona: PERSONA,
+                    scenario_id: ID,
+                    claim_type: CT,
+                    description: DESC,
+                    expected_state: EXP,
+                    actual_state: actual,
+                    is_sub_condition: true,
+                    passed,
+                    error: None,
+                    raw_wasm_outputs: raw,
+                    trees: vec![(format!("{}_{}", ID, CT), tree_c)],
+                }
+            }
+            Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, true, e),
+        };
+        out.push(result);
+    }
+
+    // --- P5-3: Attestation — attested (two-tree model using P5-1 claim) ---
+    {
+        const ID: &str = "P5-3";
+        const CT: &str = "Attestation";
+        const EXP: &str = "attested";
+        const DESC: &str = "Org attests Eve's platform identity (two-tree: attestation + claim)";
+
+        if let Some((claim_tree, claim_obj_hash, claim_sig_hash)) = p5_1_claim_state {
+            let aq = trust_one(&org_did);
+
+            let result = match async {
+                let attest_tree = builders::build_attestation_tree(
+                    &aq,
+                    &org_did,
+                    &claim_sig_hash,
+                    &claim_obj_hash.to_string(),
+                    None,
+                    None,
+                )?;
+                let attest_tree = builders::sign_ed25519(&aq, attest_tree, &org_priv).await?;
+                let attest_c = attest_tree.clone();
+                let claim_c = claim_tree.clone();
+                let (actual, raw) = verify_attestation(&aq, attest_tree, claim_tree).await?;
+                Ok::<_, MethodError>((actual, raw, attest_c, claim_c))
+            }
+            .await
+            {
+                Ok((actual, raw, attest_c, claim_c)) => {
+                    let passed = actual.as_deref() == Some(EXP);
+                    PersonaResult {
+                        persona: PERSONA,
+                        scenario_id: ID,
+                        claim_type: CT,
+                        description: DESC,
+                        expected_state: EXP,
+                        actual_state: actual,
+                        is_sub_condition: false,
+                        passed,
+                        error: None,
+                        raw_wasm_outputs: raw,
+                        trees: vec![
+                            (format!("{}_P5-1_claim", ID), claim_c),
+                            (format!("{}_{}", ID, CT), attest_c),
+                        ],
+                    }
+                }
+                Err(e) => make_err(PERSONA, ID, CT, DESC, EXP, false, e),
+            };
+            out.push(result);
+        } else {
+            // P5-1 failed to build — skip P5-3
+            out.push(make_err(
+                PERSONA,
+                ID,
+                CT,
+                DESC,
+                EXP,
+                false,
+                "skipped: P5-1 claim build failed",
+            ));
+        }
+    }
+
+    out
+}

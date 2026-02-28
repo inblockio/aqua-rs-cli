@@ -42,5 +42,6 @@ pub struct CliArgs {
     pub minimal: bool,
     pub forest_files: Option<Vec<PathBuf>>,
     pub simulate: bool,
+    pub simulate_personas: bool,
     pub keep: bool,
 }
