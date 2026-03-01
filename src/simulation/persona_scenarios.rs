@@ -228,6 +228,35 @@ fn make_err(
     }
 }
 
+/// Map claim type name → template tree chain for output.
+fn template_trees_for_claim_type(claim_type: &str) -> Vec<(String, Tree)> {
+    use aqua_rs_sdk::schema::template::BuiltInTemplate;
+    use aqua_rs_sdk::schema::templates;
+
+    let hash: Option<[u8; 32]> = match claim_type {
+        "GitHubClaim" => Some(templates::GitHubClaim::TEMPLATE_LINK),
+        "EmailClaim" => Some(templates::EmailClaim::TEMPLATE_LINK),
+        "NameClaim" => Some(templates::NameClaim::TEMPLATE_LINK),
+        "GoogleClaim" => Some(templates::GoogleClaim::TEMPLATE_LINK),
+        "PhoneClaim" => Some(templates::PhoneClaim::TEMPLATE_LINK),
+        "AddressClaim" => Some(templates::AddressClaim::TEMPLATE_LINK),
+        "DnsClaim" => Some(templates::DnsClaim::TEMPLATE_LINK),
+        "PassportClaim" => Some(templates::PassportClaim::TEMPLATE_LINK),
+        "BirthdateClaim" => Some(templates::BirthdateClaim::TEMPLATE_LINK),
+        "AgeClaim" => Some(templates::AgeClaim::TEMPLATE_LINK),
+        "DriversLicenseClaim" => Some(templates::DriversLicenseClaim::TEMPLATE_LINK),
+        "NationalIdClaim" => Some(templates::NationalIdClaim::TEMPLATE_LINK),
+        "PlatformIdentityClaim" => Some(templates::PlatformIdentityClaim::TEMPLATE_LINK),
+        "DocumentClaim" => Some(templates::DocumentClaim::TEMPLATE_LINK),
+        "Attestation" => Some(templates::Attestation::TEMPLATE_LINK),
+        _ => None,
+    };
+    match hash {
+        Some(h) => builders::template_trees_for(&h),
+        None => vec![],
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Persona 1: Alice Chen — software developer, San Francisco
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,6 +413,9 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
         out.push(result);
     }
 
+    for r in &mut out {
+        r.trees.extend(template_trees_for_claim_type(r.claim_type));
+    }
     out
 }
 
@@ -552,6 +584,9 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
         out.push(result);
     }
 
+    for r in &mut out {
+        r.trees.extend(template_trees_for_claim_type(r.claim_type));
+    }
     out
 }
 
@@ -719,6 +754,9 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
         out.push(result);
     }
 
+    for r in &mut out {
+        r.trees.extend(template_trees_for_claim_type(r.claim_type));
+    }
     out
 }
 
@@ -894,6 +932,9 @@ pub async fn persona_david() -> Vec<PersonaResult> {
         out.push(result);
     }
 
+    for r in &mut out {
+        r.trees.extend(template_trees_for_claim_type(r.claim_type));
+    }
     out
 }
 
@@ -1087,5 +1128,12 @@ pub async fn persona_eve() -> Vec<PersonaResult> {
         }
     }
 
+    for r in &mut out {
+        r.trees.extend(template_trees_for_claim_type(r.claim_type));
+        // Attestation (P5-3) also depends on the linked PlatformIdentityClaim
+        if r.claim_type == "Attestation" {
+            r.trees.extend(template_trees_for_claim_type("PlatformIdentityClaim"));
+        }
+    }
     out
 }

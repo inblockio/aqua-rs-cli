@@ -8,7 +8,7 @@ use aqua_rs_sdk::{
     schema::{
         templates::{Attestation, PlatformIdentityClaim, TrustAssertion},
         tree::Tree,
-        AquaTreeWrapper, SigningCredentials,
+        AnyRevision, AquaTreeWrapper, SigningCredentials,
     },
     Aquafier,
 };
@@ -127,4 +127,23 @@ pub fn build_trust_assertion_tree(
     aquafier
         .identity()
         .trust_assertion(ta, Some(Method::Scalar))
+}
+
+/// Get the template tree chain for a built-in template (root first).
+/// Returns `(name, Tree)` pairs suitable for adding to result.trees.
+pub fn template_trees_for(template_hash: &[u8; 32]) -> Vec<(String, Tree)> {
+    Aquafier::builtin_template_tree_chain(template_hash)
+        .into_iter()
+        .filter_map(|tree| {
+            // Find the Template revision to look up its human-readable name
+            let tpl_hash = tree
+                .revisions
+                .iter()
+                .find(|(_, r)| matches!(r, AnyRevision::Template(_)))
+                .map(|(h, _)| h.clone())?;
+            let hash_bytes: [u8; 32] = tpl_hash.as_ref().try_into().ok()?;
+            let name = Aquafier::builtin_template_name(&hash_bytes).unwrap_or("unknown");
+            Some((format!("template_{}", name), tree))
+        })
+        .collect()
 }

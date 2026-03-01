@@ -56,7 +56,12 @@ use std::sync::Arc;
 
 use aqua_rs_sdk::{
     primitives::RevisionLink,
-    schema::{tree::Tree, AquaTreeWrapper},
+    schema::{
+        template::BuiltInTemplate,
+        templates::{Attestation as AttestationTpl, PlatformIdentityClaim as ClaimTpl},
+        tree::Tree,
+        AquaTreeWrapper,
+    },
     Aquafier, DefaultTrustStore, VerificationResult,
 };
 
@@ -156,7 +161,11 @@ pub async fn c1_unsigned() -> ScenarioResult {
                     "WASM only runs when trust store is configured on Aquafier (even if empty)",
                 ],
                 raw_wasm_outputs: raw,
-                trees: vec![(format!("{}_claim", id), tree_copy)],
+                trees: {
+                    let mut t = vec![(format!("{}_claim", id), tree_copy)];
+                    t.extend(builders::template_trees_for(&ClaimTpl::TEMPLATE_LINK));
+                    t
+                },
             }
         }
         Err(e) => err_result(
@@ -524,7 +533,11 @@ pub async fn a1_headless() -> ScenarioResult {
                     "WASM runs and returns state 0 (headless) when ctx_linked_tree_count() == 0",
                 ],
                 raw_wasm_outputs: raw,
-                trees: vec![(format!("{}_attestation_headless", id), tree_copy)],
+                trees: {
+                    let mut t = vec![(format!("{}_attestation_headless", id), tree_copy)];
+                    t.extend(builders::template_trees_for(&AttestationTpl::TEMPLATE_LINK));
+                    t
+                },
             }
         }
         Err(e) => err_result(
@@ -855,7 +868,8 @@ async fn verify_claim(
 ) -> ScenarioResult {
     let tree_copy = tree.clone();
     let wrapper = AquaTreeWrapper::new(tree, None, None);
-    let trees = vec![(format!("{}_claim", id), tree_copy)];
+    let mut trees = vec![(format!("{}_claim", id), tree_copy)];
+    trees.extend(builders::template_trees_for(&ClaimTpl::TEMPLATE_LINK));
     match aq.verify_and_build_state(wrapper, vec![]).await {
         Ok((result, _nodes)) => {
             let actual = extract_state(&result);
@@ -899,10 +913,12 @@ async fn verify_attestation(
 ) -> ScenarioResult {
     let attest_copy = attest_tree.clone();
     let claim_copy = claim_tree.clone();
-    let trees = vec![
+    let mut trees = vec![
         (format!("{}_claim", id), claim_copy),
         (format!("{}_attestation", id), attest_copy),
     ];
+    trees.extend(builders::template_trees_for(&ClaimTpl::TEMPLATE_LINK));
+    trees.extend(builders::template_trees_for(&AttestationTpl::TEMPLATE_LINK));
     let attest_wrapper = AquaTreeWrapper::new(attest_tree, None, None);
     let claim_wrapper = AquaTreeWrapper::new(claim_tree, None, None);
     match aq

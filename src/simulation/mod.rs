@@ -131,10 +131,17 @@ fn keep_trees(results: &[ScenarioResult], _verbose: bool) {
     };
 
     let mut manifest: Vec<std::path::PathBuf> = Vec::new();
+    let mut written: std::collections::HashSet<String> = std::collections::HashSet::new();
     for r in results {
         for (name, tree) in &r.trees {
+            if written.contains(name) {
+                continue;
+            }
             match sandbox.write_tree(name, tree) {
-                Ok(path) => manifest.push(path),
+                Ok(path) => {
+                    manifest.push(path);
+                    written.insert(name.clone());
+                }
                 Err(e) => println!("  ERROR writing {}: {}", name, e),
             }
         }
@@ -250,11 +257,18 @@ fn keep_persona_trees(all_results: &[Vec<PersonaResult>], _verbose: bool) {
     };
 
     let mut manifest: Vec<std::path::PathBuf> = Vec::new();
+    let mut written: std::collections::HashSet<String> = std::collections::HashSet::new();
     for group in all_results {
         for r in group {
             for (name, tree) in &r.trees {
+                if written.contains(name) {
+                    continue;
+                }
                 match sandbox.write_tree(name, tree) {
-                    Ok(path) => manifest.push(path),
+                    Ok(path) => {
+                        manifest.push(path);
+                        written.insert(name.clone());
+                    }
                     Err(e) => println!("  ERROR writing {}: {}", name, e),
                 }
             }

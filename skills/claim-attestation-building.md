@@ -24,7 +24,7 @@ let claim = PlatformIdentityClaim {
     metadata: None,
 };
 
-// 1. Build unsigned claim (template + genesis anchor + object)
+// 1. Build unsigned claim (genesis anchor + object — template is NOT embedded)
 let unsigned = aquafier.identity().claim(claim, Some(Method::Scalar))?;
 
 // Capture object hash BEFORE signing (used as informational context in paired attestation).
@@ -37,13 +37,15 @@ let signed_claim = sign_ed25519(&aquafier, unsigned, &claimer_priv_bytes).await?
 let claim_sig_hash = signed_claim.get_latest_revision_link().unwrap();
 ```
 
-**Resulting structure (4 revisions):**
+**Resulting structure (3 revisions):**
 ```
-Template      (genesis)
 Anchor        (genesis, link_verification_hashes=[template_hash])
 Object        (prev=anchor)   payloads: { signer_did, provider, ... }
 Signature     (prev=object)   signer: claimer_did
 ```
+
+Templates are **separate trees**, not embedded. The anchor's `link_verification_hashes`
+references the template hash, which is resolved from the built-in cache during verification.
 
 **Standalone verification (C1/C2 states):**
 ```rust
@@ -77,9 +79,8 @@ let attest_tree = aquafier
 let signed_attest = sign_p256(&aquafier, attest_tree, &attester_priv_bytes).await?;
 ```
 
-**Resulting structure (4 revisions):**
+**Resulting structure (3 revisions):**
 ```
-Template      (genesis)
 Anchor        (genesis, link_verification_hashes=[claim_sig_hash])  ← NOT template_hash
 Object        (prev=anchor)   payloads: { signer_did: attester, context: claim_obj_hash }
 Signature     (prev=object)   signer: attester_did
@@ -148,21 +149,15 @@ let (result, _) = aquafier
 // wasm_outputs → { "state": "headless", "state_index": 0 }
 ```
 
-Or equivalently with an explicit zero link:
-```rust
-let zero = RevisionLink::zero(); // 0x0000...0000 (32 bytes)
-aquafier.identity().attestation(attest, &zero, Some(Method::Scalar))?;
-```
-
 ---
 
 ## Common Mistakes
 
 | Mistake | Symptom | Fix |
 |---|---|---|
+| Expecting template in object tree | Template revision not found | Templates are separate trees; resolved from built-in cache |
 | `create_object` for attestation genesis | Genesis anchor → template hash, not claim sig | Use `identity().attestation(attest, &claim_sig_hash, method)` |
 | `link_aqua_tree` to attach claim | Trailing anchor after sig; claim dep declared retroactively | Use genesis anchor with `claim_sig_hash` instead |
-| Sign attestation AFTER `link_aqua_tree` (old model) | State = `unsigned` (sig trails anchor, WASM misses it) | No longer relevant — no trailing anchor |
 | No trust store on `Aquafier` | `wasm_outputs` always empty | Call `.with_trust_store(...)` on the Aquafier |
 | Pass attestation as linked tree | WASM runs on claim, not attestation | Primary = attestation, linked = `[claim]` |
 
