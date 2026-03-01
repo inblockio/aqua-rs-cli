@@ -275,6 +275,14 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .help("Ingest one or more .aqua.json files into an ephemeral in-memory forest and display the combined verified state"),
         )
         .arg(
+            Arg::new("trust")
+                .long("trust")
+                .action(ArgAction::Set)
+                .num_args(2)
+                .value_names(["DID", "LEVEL"])
+                .help("Populate the trust store with a DID at a given trust level (1=marginal, 2=full, 3=ultimate). Used with --forest"),
+        )
+        .arg(
             Arg::new("simulate")
                 .long("simulate")
                 .action(ArgAction::SetTrue)
@@ -358,6 +366,17 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let simulate = matches.get_flag("simulate");
     let simulate_personas = matches.get_flag("simulate-personas");
     let keep = matches.get_flag("keep");
+    let trust = matches.get_many::<String>("trust").map(|mut vals| {
+        let did = vals.next().unwrap().clone();
+        let level_str = vals.next().unwrap();
+        let level: u8 = level_str
+            .parse()
+            .unwrap_or_else(|_| {
+                eprintln!("Warning: invalid trust level '{}', using 2 (full)", level_str);
+                2
+            });
+        (did, level)
+    });
 
     Ok(CliArgs {
         authenticate,
@@ -381,6 +400,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         list_templates,
         minimal,
         forest_files,
+        trust,
         simulate,
         simulate_personas,
         keep,

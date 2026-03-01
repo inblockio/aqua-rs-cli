@@ -41,6 +41,7 @@ pub struct CliArgs {
     pub list_templates: bool,
     pub minimal: bool,
     pub forest_files: Option<Vec<PathBuf>>,
+    pub trust: Option<(String, u8)>,
     pub simulate: bool,
     pub simulate_personas: bool,
     pub keep: bool,

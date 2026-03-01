@@ -4,31 +4,44 @@
 //! Ephemeral forest CLI command.
 //!
 //! `cli_ephemeral_forest` ingests one or more `.aqua.json` files into a
-//! session-bound in-memory forest (backed by `StateNode` collections), then
-//! prints a summary of the combined verified state: node counts, genesis
-//! hashes, tip revisions, and any unresolved cross-tree dependencies.
+//! daemon `Forest` backed by `NullStorage`, resolving cross-tree dependencies
+//! (attestation→claim, template hierarchies) via a pre-built revision index.
+//! Prints a summary using the Forest API: node counts, genesis hashes, tip
+//! revisions, and any genuinely unresolved L3 dependencies.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use aqua_rs_sdk::daemon::topological_order;
-use aqua_rs_sdk::policy::StateNode;
+use aqua_rs_sdk::daemon::{topological_order, Forest, NullStorage};
+use aqua_rs_sdk::primitives::RevisionLink;
 use aqua_rs_sdk::schema::tree::Tree;
-use aqua_rs_sdk::schema::AquaTreeWrapper;
-use aqua_rs_sdk::Aquafier;
+use aqua_rs_sdk::schema::{AnyRevision, AquaTreeWrapper};
+use aqua_rs_sdk::{Aquafier, DefaultTrustStore};
 
 use crate::models::CliArgs;
 
 extern crate serde_json_path_to_error as serde_json;
 
 pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec<PathBuf>) {
+    // Build a local Aquafier with trust store if --trust was provided
+    let aquafier = if let Some((ref did, level)) = args.trust {
+        let mut levels = HashMap::new();
+        levels.insert(did.clone(), level);
+        println!("Trust store: {} at level {}", did, level);
+        aquafier.with_trust_store(Arc::new(DefaultTrustStore::new(levels)))
+    } else {
+        aquafier.with_trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
+    };
+
     println!("Building ephemeral forest from {} file(s)...", files.len());
     println!();
 
-    let mut all_nodes: Vec<StateNode> = Vec::new();
-    let mut ingested = 0usize;
-    let mut failed = 0usize;
+    // ── Phase 1: Load all trees and build rev_hash → tree_index map ─────
+    let mut trees: Vec<(String, Tree)> = Vec::new();
+    let mut rev_to_idx: HashMap<String, usize> = HashMap::new();
+    let mut load_failed = 0usize;
 
     for file in &files {
         let name = file
@@ -36,13 +49,11 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| file.to_string_lossy().into_owned());
 
-        print!("  [{}] ", name);
-
         let file_content = match fs::read_to_string(file) {
             Ok(s) => s,
             Err(e) => {
-                println!("FAILED — read error: {}", e);
-                failed += 1;
+                println!("  [{}] FAILED — read error: {}", name, e);
+                load_failed += 1;
                 continue;
             }
         };
@@ -50,73 +61,152 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
         let tree: Tree = match serde_json::from_str(&file_content) {
             Ok(t) => t,
             Err(e) => {
-                println!("FAILED — parse error: {}", e);
-                failed += 1;
+                println!("  [{}] FAILED — parse error: {}", name, e);
+                load_failed += 1;
                 continue;
             }
         };
 
-        let wrapper = AquaTreeWrapper::new(tree, None, None);
-        let state_nodes = match aquafier.verify_and_build_state(wrapper, vec![]).await {
-            Ok((_result, nodes)) => nodes,
-            Err(e) => {
-                println!("FAILED — verify error: {}", e);
-                failed += 1;
-                continue;
-            }
-        };
-
-        let node_count = state_nodes.len();
-        ingested += 1;
-        println!("OK  ({} node(s))", node_count);
-        all_nodes.extend(state_nodes);
+        let idx = trees.len();
+        for rev_hash in tree.revisions.keys() {
+            rev_to_idx.insert(rev_hash.to_string(), idx);
+        }
+        trees.push((name, tree));
     }
 
-    println!();
+    // ── Phase 2: Verify with pre-resolved linked trees, insert into Forest ──
+    let mut forest = Forest::new("cli", "cli:session", Box::new(NullStorage));
+    let mut results: Vec<(String, bool, String)> = Vec::new();
 
-    // Topological order all nodes across all files
-    let ordered = topological_order(all_nodes);
+    for i in 0..trees.len() {
+        let (name, tree) = &trees[i];
 
-    // Build index structures
-    let mut children: HashMap<String, Vec<String>> = HashMap::new();
-    let mut genesis_hashes: Vec<String> = Vec::new();
-    let node_map: HashMap<String, &StateNode> = ordered
-        .iter()
-        .map(|n| (n.revision_hash.clone(), n))
-        .collect();
-
-    for node in &ordered {
-        match &node.parent_hash {
-            Some(ph) => {
-                children
-                    .entry(ph.clone())
-                    .or_default()
-                    .push(node.revision_hash.clone());
+        // Extract link_verification_hashes from anchor revisions
+        let mut link_hashes: Vec<String> = Vec::new();
+        for revision in tree.revisions.values() {
+            if let AnyRevision::Anchor(anchor) = revision {
+                for lh in anchor.link_verification_hashes() {
+                    let lh_str = lh.to_string();
+                    // Skip zero-sentinel links (headless attestations)
+                    if lh_str != RevisionLink::zero().to_string() {
+                        link_hashes.push(lh_str);
+                    }
+                }
             }
-            None => {
-                genesis_hashes.push(node.revision_hash.clone());
+        }
+
+        // Resolve links to containing trees (O(1) per link via rev_to_idx)
+        let mut linked_wrappers: Vec<AquaTreeWrapper> = Vec::new();
+        for lh in &link_hashes {
+            if let Some(&linked_idx) = rev_to_idx.get(lh) {
+                if linked_idx != i {
+                    let linked_tree = trees[linked_idx].1.clone();
+                    linked_wrappers.push(AquaTreeWrapper::new(linked_tree, None, None));
+                }
+            }
+        }
+
+        let wrapper = AquaTreeWrapper::new(tree.clone(), None, None);
+        let verify_result = if linked_wrappers.is_empty() {
+            aquafier.verify_and_build_state(wrapper, vec![]).await
+        } else {
+            aquafier
+                .verify_and_build_state_with_linked_trees(wrapper, linked_wrappers, vec![])
+                .await
+        };
+
+        match verify_result {
+            Ok((vr, state_nodes)) => {
+                let node_count = state_nodes.len();
+                let status = if vr.is_valid {
+                    format!("OK  ({} node(s))", node_count)
+                } else {
+                    format!("WARN ({}, {} node(s))", vr.status, node_count)
+                };
+
+                // Insert state nodes into forest in topological order
+                let ordered = topological_order(state_nodes);
+                for node in ordered {
+                    let node_links = node.link_verification_hashes.clone();
+                    let rev_hash_str = node.revision_hash.clone();
+                    forest.insert_node(node);
+
+                    // Handle cross-tree dependencies
+                    if let Some(links) = node_links {
+                        for lh_str in &links {
+                            if let Ok(lh) = lh_str.parse::<RevisionLink>() {
+                                // Skip zero-sentinel
+                                if lh == RevisionLink::zero() {
+                                    continue;
+                                }
+                                // Try to load as built-in template first
+                                if !forest.load_builtin_template(&lh) {
+                                    // Not a builtin — register as L3 pending if unresolved
+                                    if forest.get_node(&lh).is_none() {
+                                        if let Ok(owner) = rev_hash_str.parse::<RevisionLink>() {
+                                            forest.register_l3_pending(owner, lh);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                results.push((name.clone(), vr.is_valid, status));
+            }
+            Err(e) => {
+                results.push((
+                    name.clone(),
+                    false,
+                    format!("FAILED — verify error: {}", e),
+                ));
             }
         }
     }
 
-    // Tips: nodes that are not referenced as anyone's parent
-    let all_parents: HashSet<&String> = children.keys().collect();
-    let tips: Vec<&str> = ordered
-        .iter()
-        .filter(|n| !all_parents.contains(&n.revision_hash))
-        .map(|n| n.revision_hash.as_str())
-        .collect();
+    // ── Phase 3: Post-insert L3 resolution ──────────────────────────────
+    // Some pending entries may now be resolvable (later files contained
+    // the awaited hashes).
+    let pending_keys: Vec<RevisionLink> = forest.pending_dependencies().keys().cloned().collect();
+    for awaited in &pending_keys {
+        if forest.get_node(awaited).is_some() {
+            forest.resolve_l3_pending(awaited);
+        }
+    }
 
-    let node_count = ordered.len();
+    // ── Phase 4: Report ─────────────────────────────────────────────────
+    // Per-file verification results
+    println!("Per-file verification:");
+    let mut pass_count = 0usize;
+    let mut fail_count = 0usize;
+    for (name, passed, status) in &results {
+        println!("  [{}] {}", name, status);
+        if *passed {
+            pass_count += 1;
+        } else {
+            fail_count += 1;
+        }
+    }
+    println!();
+
+    // Forest summary via Forest API
+    let summary = forest.summary();
+    let genesis_hashes = forest.genesis_hashes();
+    let tips = forest.tips();
 
     println!("Ephemeral Forest Summary");
     println!("========================");
-    println!("  Session     : cli:session");
-    println!("  Files       : {} ingested, {} failed", ingested, failed);
-    println!("  Nodes       : {}", node_count);
-    println!("  Geneses     : {}", genesis_hashes.len());
+    println!("  Session     : {}", summary.namespace_name);
+    println!(
+        "  Files       : {} ingested, {} failed",
+        pass_count + fail_count,
+        load_failed
+    );
+    println!("  Nodes       : {}", summary.node_count);
+    println!("  Geneses     : {}", summary.genesis_count);
+    println!("  Pending deps: {}", summary.pending_count);
 
-    // Genesis trees
     if !genesis_hashes.is_empty() {
         println!();
         println!("Genesis trees ({}):", genesis_hashes.len());
@@ -125,7 +215,6 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
         }
     }
 
-    // Tip revisions
     if !tips.is_empty() {
         println!();
         println!("Tip revisions ({}):", tips.len());
@@ -134,29 +223,41 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
         }
     }
 
-    // Outcome line
-    println!();
-    if failed == 0 && node_count > 0 {
-        println!("Forest built successfully.");
-    } else if failed > 0 && ingested == 0 {
-        eprintln!("All files failed to ingest.");
-        std::process::exit(1);
-    } else if failed > 0 {
-        println!("Forest built with {} error(s).", failed);
+    let remaining_pending = forest.pending_dependencies();
+    if !remaining_pending.is_empty() {
+        println!();
+        println!(
+            "Unresolved cross-tree dependencies ({}):",
+            remaining_pending.len()
+        );
+        for (awaited, owners) in remaining_pending {
+            println!("  {} (awaited by {} node(s))", awaited, owners.len());
+        }
     }
 
-    // Verbose: print each node subtree
+    // Outcome line
+    println!();
+    if fail_count == 0 && load_failed == 0 && summary.node_count > 0 {
+        println!("Forest built successfully.");
+    } else if load_failed + fail_count > 0 && pass_count == 0 {
+        eprintln!("All files failed to ingest.");
+        std::process::exit(1);
+    } else if fail_count + load_failed > 0 {
+        println!("Forest built with {} error(s).", fail_count + load_failed);
+    }
+
+    // Verbose: walk subtrees from genesis roots
     if args.verbose {
         println!();
         println!("Node details:");
         for gh in &genesis_hashes {
-            print_node_subtree(gh, &node_map, &children, 0);
+            print_forest_subtree(&forest, gh, 0);
         }
     }
 
     // Output file support
     if let Some(output_path) = &args.output {
-        let report = build_forest_report(&genesis_hashes, &tips, node_count);
+        let report = build_forest_report(&forest);
         match fs::write(output_path, report) {
             Ok(_) => println!("Report written to {:?}", output_path),
             Err(e) => eprintln!("Failed to write report: {}", e),
@@ -164,27 +265,23 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
     }
 }
 
-/// Recursively print a node and its children with indentation (verbose mode).
-fn print_node_subtree(
-    hash: &str,
-    node_map: &HashMap<String, &StateNode>,
-    children: &HashMap<String, Vec<String>>,
-    depth: usize,
-) {
+/// Recursively print a forest node and its children with indentation (verbose mode).
+fn print_forest_subtree(forest: &Forest, hash: &RevisionLink, depth: usize) {
     let indent = "  ".repeat(depth + 1);
-    if let Some(node) = node_map.get(hash) {
-        let signer = node.signer.as_deref().unwrap_or("-");
-        let rev_type = truncate(&node.revision_type, 12);
+    if let Some(node) = forest.get_node(hash) {
+        let signer = node.state.signer.as_deref().unwrap_or("-");
+        let rev_type = truncate(&node.state.revision_type, 12);
+        let hash_str = hash.to_string();
         println!(
             "{}[{}] type={} signer={}",
             indent,
-            truncate(hash, 14),
+            truncate(&hash_str, 14),
             rev_type,
             signer
         );
-        if let Some(child_hashes) = children.get(hash) {
-            for child_hash in child_hashes {
-                print_node_subtree(child_hash, node_map, children, depth + 1);
+        for child in forest.branches(hash) {
+            if let Ok(child_link) = child.state.revision_hash.parse::<RevisionLink>() {
+                print_forest_subtree(forest, &child_link, depth + 1);
             }
         }
     }
@@ -199,18 +296,25 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
-/// Serialize a basic JSON report for --output support.
-fn build_forest_report(
-    genesis_hashes: &[String],
-    tips: &[&str],
-    node_count: usize,
-) -> String {
+/// Serialize a JSON report using Forest API data.
+fn build_forest_report(forest: &Forest) -> String {
+    let summary = forest.summary();
+    let genesis_hashes: Vec<String> = forest.genesis_hashes().iter().map(|h| h.to_string()).collect();
+    let tips: Vec<String> = forest.tips().iter().map(|h| h.to_string()).collect();
+    let pending: Vec<String> = forest
+        .pending_dependencies()
+        .keys()
+        .map(|h| h.to_string())
+        .collect();
+
     let report = serde_json::json!({
-        "session": "cli:session",
-        "node_count": node_count,
-        "genesis_count": genesis_hashes.len(),
+        "session": summary.namespace_name,
+        "node_count": summary.node_count,
+        "genesis_count": summary.genesis_count,
         "genesis_hashes": genesis_hashes,
         "tips": tips,
+        "pending_count": summary.pending_count,
+        "pending_dependencies": pending,
     });
 
     serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".to_string())
