@@ -50,8 +50,9 @@ COMMANDS:
        Requires --template-name <NAME> or --template-hash <HASH>, and --payload <PATH_OR_JSON>.
    * --list-templates to list all available built-in templates with their hashes.
    * --forest to ingest one or more .aqua.json files into an ephemeral in-memory forest
-       and display the combined verified state: node counts, genesis trees, tip revisions,
-       and unresolved L3 cross-tree dependencies. Accepts one or more file paths.
+       with cross-tree resolution (attestation→claim, template dependencies).
+       Displays node counts, genesis trees, tip revisions, and unresolved L3 deps.
+       Use --trust <DID> <LEVEL> to populate the trust store (enables WASM verification).
        Use -v (--verbose) to print per-node details.
 
 EXAMPLES:
@@ -77,6 +78,11 @@ EXAMPLES:
     aqua-cli --create-object --template-name name --payload '{"first_name": "Alice", "last_name": "Smith"}'
     # Create object with a custom template hash:
     aqua-cli --create-object --template-hash 0x<hash> --payload data.json
+
+    # Ephemeral forest with cross-tree resolution:
+    aqua-cli --forest dir/*.aqua.json -v
+    # Forest with trusted DID (enables WASM compute verification):
+    aqua-cli --forest dir/*.aqua.json --trust did:pkh:p256:0x02... 2
 
 SUMMARY
    * aqua-cli expects at least one parameter -s,-v,-w or -f.
