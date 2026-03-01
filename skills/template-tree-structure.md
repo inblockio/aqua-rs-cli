@@ -43,6 +43,26 @@ During WASM verification the engine walks the ancestry chain
 (`collect_ancestor_verifications`) to find and execute all ancestor WASMs
 in order (parent first, child overrides).
 
+### Cross-Tree Dependency Visibility
+
+**Important:** Template `derives_from` hashes are implicit cross-tree
+dependencies. Generic tooling (forest L3 scan, DAG renderers, state-viewer)
+discovers cross-tree edges by reading `StateNode.link_verification_hashes`.
+Anchors populate this field automatically. Templates must do so explicitly.
+
+The policy `build_state_nodes()` function maps template `derives_from` into
+`StateNode.link_verification_hashes` (with `link_type: "derives_from"`),
+making template-to-template edges visible through the **same pathway** as
+anchor cross-tree links. This ensures:
+
+1. Forest L3 scan discovers and auto-loads parent template chains
+2. DAG renderers draw template→parent edges without special-casing
+3. The state-viewer shows the full derivation graph
+
+Without this, derived template trees would appear as disconnected islands in
+the forest because nothing in their structure references the parent template
+through the standard link pathway.
+
 ### SDK API for Template Trees
 
 ```rust
@@ -197,6 +217,7 @@ let aq = Aquafier::builder()
 | `builtin_template_tree(&hash)` | Single Template revision | (template tree) |
 | `builtin_template_tree_chain(&hash)` | Vec of template trees (root first) | (template chain) |
 | `builtin_template_name(&hash)` | Human-readable name | — |
+| `resolve_dependency_trees(&tree)` | Vec of dependency template trees | (from genesis anchor links) |
 
 ---
 
