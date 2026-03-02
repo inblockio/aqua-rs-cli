@@ -10,6 +10,7 @@ use aqua_rs_sdk::schema::{AnyRevision, AquaTreeWrapper, FileData};
 use aqua_rs_sdk::Aquafier;
 
 use crate::{
+    aqua::target::push_tree_to_daemon,
     models::CliArgs,
     utils::{format_method_error, oprataion_logs_and_dumps},
 };
@@ -109,7 +110,7 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
                 }
             }
 
-            let wrapper = AquaTreeWrapper::new(tree, None, None);
+            let wrapper = AquaTreeWrapper::new(tree.clone(), None, None);
 
             let verify_result = if linked_trees.is_empty() {
                 aquafier.verify_aqua_tree(wrapper, file_objects).await
@@ -130,6 +131,14 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
                     // Add detailed logs
                     for log_entry in &res.logs {
                         logs_data.push(log_entry.display());
+                    }
+
+                    // Push to daemon if --target is set
+                    if let Some(target_id) = args.target {
+                        match push_tree_to_daemon(target_id, &tree).await {
+                            Ok(resp) => logs_data.push(format!("Pushed to daemon {}: {}", target_id, resp)),
+                            Err(e) => logs_data.push(format!("Failed to push to daemon: {}", e)),
+                        }
                     }
                 }
                 Err(err) => {

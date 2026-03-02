@@ -7,6 +7,7 @@ use aqua_rs_sdk::schema::tree::Tree;
 use aqua_rs_sdk::schema::{AquaTreeWrapper, TimestampCredentials};
 use aqua_rs_sdk::Aquafier;
 
+use crate::aqua::target::push_tree_to_daemon;
 use crate::models::{CliArgs, WitnessType};
 use crate::utils::{
     format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials,
@@ -122,6 +123,14 @@ pub(crate) async fn cli_winess_chain(
 
                     if e.is_err() {
                         logs_data.push(format!("Error saving page data: {:#?}", e.err()));
+                    }
+
+                    // Push to daemon if --target is set
+                    if let Some(target_id) = args.target {
+                        match push_tree_to_daemon(target_id, &op_data.aqua_tree).await {
+                            Ok(resp) => logs_data.push(format!("Pushed to daemon {}: {}", target_id, resp)),
+                            Err(e) => logs_data.push(format!("Failed to push to daemon: {}", e)),
+                        }
                     }
                 }
                 Err(err) => {

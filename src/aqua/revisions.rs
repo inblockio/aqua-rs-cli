@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use aqua_rs_sdk::schema::{AquaTreeWrapper, FileData};
 use aqua_rs_sdk::Aquafier;
 
+use crate::aqua::target::push_tree_to_daemon;
 use crate::models::CliArgs;
 use crate::utils::{
     format_method_error, oprataion_logs_and_dumps, read_aqua_data, save_logs_to_file,
@@ -64,7 +65,7 @@ pub fn cli_remove_revisions_from_aqua_chain(
 }
 
 /// Generates an Aqua chain (genesis revision) from a given file.
-pub fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
+pub async fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
     let mut logs_data: Vec<String> = Vec::new();
 
     if let Some(file_path) = args.clone().file {
@@ -83,6 +84,14 @@ pub fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
 
                             if e.is_err() {
                                 logs_data.push(format!("Error saving page data: {:#?}", e.err()));
+                            }
+
+                            // Push to daemon if --target is set
+                            if let Some(target_id) = args.target {
+                                match push_tree_to_daemon(target_id, &tree).await {
+                                    Ok(resp) => logs_data.push(format!("Pushed to daemon {}: {}", target_id, resp)),
+                                    Err(e) => logs_data.push(format!("Failed to push to daemon: {}", e)),
+                                }
                             }
                         }
                         Err(err) => {

@@ -9,6 +9,7 @@ pub mod tests;
 pub mod utils;
 
 use crate::models::{CliArgs, SignType, WitnessType};
+use aqua::connect::cli_connect_forest;
 use aqua::forest::cli_ephemeral_forest;
 use aqua::link::cli_link_chain;
 use aqua::object::{cli_create_object, cli_list_templates};
@@ -54,6 +55,11 @@ COMMANDS:
        Displays node counts, genesis trees, tip revisions, and unresolved L3 deps.
        Use --trust <DID> <LEVEL> to populate the trust store (enables WASM verification).
        Use -v (--verbose) to print per-node details.
+   * --daemon [SECONDS] to keep the forest alive as a persistent daemon (default 600s idle timeout).
+       Requires --forest. Opens a REPL on stdin and a Unix socket for IPC.
+   * --connect <ID> to connect to a running daemon's REPL via Unix socket.
+   * --target <ID> to push operation results into a running daemon's forest.
+       Modifier for -a, -s, -w, -f.
 
 EXAMPLES:
     aqua-cli -a chain.json
@@ -83,6 +89,15 @@ EXAMPLES:
     aqua-cli --forest dir/*.aqua.json -v
     # Forest with trusted DID (enables WASM compute verification):
     aqua-cli --forest dir/*.aqua.json --trust did:pkh:p256:0x02... 2
+
+    # Start a persistent forest daemon (600s idle timeout):
+    aqua-cli --forest dir/*.aqua.json --daemon
+    # Daemon with custom timeout and trust store:
+    aqua-cli --forest dir/*.aqua.json --daemon 300 --trust did:pkh:... 2
+    # Connect to a running daemon from another terminal:
+    aqua-cli --connect 12345
+    # Push a verification result into a running daemon:
+    aqua-cli -a newfile.aqua.json --target 12345
 
 SUMMARY
    * aqua-cli expects at least one parameter -s,-v,-w or -f.
@@ -306,13 +321,37 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .action(ArgAction::SetTrue)
                 .help("Keep simulation tree files on disk for inspection (use with --simulate or --simulate-personas)"),
         )
+        .arg(
+            Arg::new("daemon")
+                .long("daemon")
+                .action(ArgAction::Set)
+                .num_args(0..=1)
+                .default_missing_value("600")
+                .value_parser(clap::value_parser!(u64))
+                .requires("forest")
+                .help("Keep the forest alive as a persistent daemon with idle timeout in seconds (default: 600)"),
+        )
+        .arg(
+            Arg::new("connect")
+                .long("connect")
+                .action(ArgAction::Set)
+                .value_parser(clap::value_parser!(u64))
+                .help("Connect to a running forest daemon's REPL by its ID (PID)"),
+        )
+        .arg(
+            Arg::new("target")
+                .long("target")
+                .action(ArgAction::Set)
+                .value_parser(clap::value_parser!(u64))
+                .help("Push operation result into a running daemon's forest by its ID (PID)"),
+        )
         .group(
             ArgGroup::new("template")
                 .args(["template-hash", "template-name"])
         )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas", "connect"])
                 .required(true),
         )
         .get_matches();
@@ -372,6 +411,9 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let simulate = matches.get_flag("simulate");
     let simulate_personas = matches.get_flag("simulate-personas");
     let keep = matches.get_flag("keep");
+    let daemon = matches.get_one::<u64>("daemon").copied();
+    let connect = matches.get_one::<u64>("connect").copied();
+    let target = matches.get_one::<u64>("target").copied();
     let trust = matches.get_many::<String>("trust").map(|mut vals| {
         let did = vals.next().unwrap().clone();
         let level_str = vals.next().unwrap();
@@ -410,6 +452,9 @@ pub fn parse_args() -> Result<CliArgs, String> {
         simulate,
         simulate_personas,
         keep,
+        daemon,
+        connect,
+        target,
     })
 }
 
@@ -473,6 +518,11 @@ async fn main() {
             );
             std::process::exit(1);
         }
+    }
+
+    if let Some(id) = args.connect {
+        cli_connect_forest(id).await;
+        return;
     }
 
     if args.authenticate.is_none()
@@ -582,7 +632,7 @@ async fn main() {
         }
         (_, _, _, _, _, Some(file_path), _, _) => {
             println!("Generating aqua json file from: {:?}", file_path);
-            cli_generate_aqua_chain(args.clone(), &aquafier);
+            cli_generate_aqua_chain(args.clone(), &aquafier).await;
         }
         (_, _, _, _, _, _, Some(link_paths), _) => {
             let parent = link_paths[0].clone();

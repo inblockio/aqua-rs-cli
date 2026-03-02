@@ -45,4 +45,7 @@ pub struct CliArgs {
     pub simulate: bool,
     pub simulate_personas: bool,
     pub keep: bool,
+    pub daemon: Option<u64>,
+    pub connect: Option<u64>,
+    pub target: Option<u64>,
 }

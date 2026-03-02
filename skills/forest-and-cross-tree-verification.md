@@ -1,8 +1,9 @@
 # Forest & Cross-Tree Verification
 
 How `--forest` and `--authenticate` resolve cross-tree dependencies
-(attestation→claim, template hierarchies) and how `--trust` enables
-WASM compute verification.
+(attestation→claim, template hierarchies), how `--trust` enables
+WASM compute verification, and how `--daemon` keeps the forest alive
+with Unix socket IPC (`--connect`, `--target`).
 
 ---
 
@@ -106,6 +107,103 @@ The `--trust` param is stored as `trust: Option<(String, u8)>` in `CliArgs`.
 
 ---
 
+## `--daemon`: Persistent Forest with Unix Socket IPC
+
+When `--daemon` is appended to a `--forest` command, the forest stays alive
+after initial ingestion. A REPL is available on stdin and a Unix socket
+at `/tmp/aqua-forest-<PID>.sock` accepts connections from `--connect` and
+`--target`.
+
+### CLI params
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `--daemon [SECONDS]` | Optional u64, default 600 | Keep forest alive with idle timeout. Requires `--forest`. |
+| `--connect <ID>` | u64 | Connect to a running daemon's REPL (standalone operation). |
+| `--target <ID>` | u64 | Push operation result into a running daemon. Modifier for `-a`, `-s`, `-w`, `-f`. |
+
+### Daemon startup flow
+
+1. Run existing 4-phase forest algorithm (unchanged)
+2. Use PID as the ephemeral ID
+3. Create Unix socket at `/tmp/aqua-forest-<PID>.sock`
+4. Print startup banner with ID, timeout, and socket path
+5. `tokio::select!` on stdin REPL / socket accept / idle timeout / Ctrl+C
+6. On exit: remove socket file, print shutdown message
+
+### Concurrency model
+
+- `Arc<tokio::sync::Mutex<DaemonState>>` for shared state
+- `DaemonState` holds: `Forest`, `Aquafier`, `rev_to_tree` index, idle tracking
+- `touch()` called on every command from any source (stdin, socket, `--target`)
+- Per socket connection: spawned task, locks state per command
+
+### Socket protocol
+
+Line-based text:
+- Client sends: `<command>\n`
+- Server responds: multi-line response terminated by `\0\n` sentinel
+- `ingest` command: Tree JSON on single line (no newlines in JSON)
+
+### REPL command grammar
+
+**Read commands:**
+
+| Command | SDK method | Output |
+|---------|-----------|--------|
+| `status` | `summary()` + `remaining()` | Node/genesis/pending counts + idle time remaining |
+| `geneses` | `genesis_hashes()` | List all genesis hashes |
+| `tips` | `tips()` | List all tip (leaf) hashes |
+| `pending` | `pending_dependencies()` | List unresolved L3 deps with owner counts |
+| `inspect <hash>` | `get_state_node(hash)` | Full state node details |
+| `branches <hash>` | `branches(hash)` | Direct children of a node |
+| `tree <hash>` | recursive walk | Indented subtree |
+| `count` | `node_count()` | Live node count |
+
+**Write commands:**
+
+| Command | SDK method | Semantics |
+|---------|-----------|-----------|
+| `add <file> [file...]` | verify + `insert_node` | Ingest new .aqua.json files |
+| `evict <genesis_hash>` | `evict_node(hash)` | Remove genesis + cascade entire subtree |
+| `remove <hash>` | `remove_node(hash)` | Surgical remove single node (no cascade) |
+
+**Session commands:** `help`, `quit` / `exit`
+
+**Hash prefix matching:** All `<hash>` arguments accept prefix matching
+(minimum 8 hex chars after `0x`). Ambiguous prefixes return an error
+listing all matches.
+
+**Hidden `ingest` command:** Used by `--target` to push a serialized
+Tree JSON into the forest. Not intended for interactive use.
+
+### `--target` integration
+
+When `-a`, `-s`, `-w`, or `-f` is invoked with `--target <ID>`,
+the result tree is serialized to JSON and sent to the daemon via the
+`ingest` command on the Unix socket. The daemon verifies and inserts
+the tree, then returns a status line.
+
+Implemented in `src/aqua/target.rs` (`push_tree_to_daemon()`), called
+from `verify.rs`, `sign.rs`, `witness.rs`, and `revisions.rs`.
+
+### Key structs
+
+```rust
+// src/aqua/forest.rs
+struct DaemonState {
+    forest: Forest,
+    aquafier: Aquafier,
+    rev_to_tree: HashMap<String, (String, Tree)>,
+    last_accessed: Instant,
+    idle_timeout: Duration,
+    id: u64,
+    verbose: bool,
+}
+```
+
+---
+
 ## End-to-End Example
 
 ```bash
@@ -113,17 +211,30 @@ The `--trust` param is stored as `trust: Option<(String, u8)>` in `CliArgs`.
 cargo run --bin aqua-cli --features simulation -- --simulate --keep -v
 # Output: /tmp/aqua-sim-XXXXXX/ with 24 .aqua.json files
 
-# 2. Forest verification (all trees, with trusted attester)
+# 2. Ephemeral forest verification (exits immediately)
 cargo run --bin aqua-cli -- \
   --forest /tmp/aqua-sim-XXXXXX/*.aqua.json \
   --trust did:pkh:p256:0x02... 2
 
-# Expected output:
-#   Per-file verification: all OK
-#   Forest: 63 nodes, 24 geneses, 0 pending deps
-#   "Forest built successfully."
+# 3. Persistent daemon (stays alive for 600s)
+cargo run --bin aqua-cli -- \
+  --forest /tmp/aqua-sim-XXXXXX/*.aqua.json --daemon
+# forest> status
+# forest> geneses
+# forest> inspect 0xabcdef12
+# forest> add /path/to/new.aqua.json
+# forest> evict 0xabcdef12
+# forest> quit
 
-# 3. Single-file attestation verification (auto-finds claim in same dir)
+# 4. Connect from another terminal
+cargo run --bin aqua-cli -- --connect <PID>
+# forest> tips
+# forest> tree 0xabcdef12
+
+# 5. Push verification into running daemon
+cargo run --bin aqua-cli -- -a newfile.aqua.json --target <PID>
+
+# 6. Single-file attestation verification (auto-finds claim in same dir)
 cargo run --bin aqua-cli -- -a /tmp/aqua-sim-XXXXXX/A4_attestation.aqua.json
 ```
 
@@ -131,7 +242,12 @@ cargo run --bin aqua-cli -- -a /tmp/aqua-sim-XXXXXX/A4_attestation.aqua.json
 
 ## Source Files
 
-- `src/aqua/forest.rs` — `cli_ephemeral_forest()`, 4-phase algorithm
-- `src/aqua/verify.rs` — `cli_verify_chain()`, directory-scan resolution
-- `src/main.rs` — `--forest`, `--trust` arg parsing
-- `src/models.rs` — `CliArgs.trust: Option<(String, u8)>`
+- `src/aqua/forest.rs` — `cli_ephemeral_forest()`, 4-phase algorithm, `DaemonState`, `run_daemon()`, `execute_command()`, `handle_socket_client()`
+- `src/aqua/connect.rs` — `cli_connect_forest()`, client REPL for `--connect`
+- `src/aqua/target.rs` — `push_tree_to_daemon()`, helper for `--target`
+- `src/aqua/verify.rs` — `cli_verify_chain()`, directory-scan resolution, `--target` push
+- `src/aqua/sign.rs` — `cli_sign_chain()`, `--target` push after signing
+- `src/aqua/witness.rs` — `cli_winess_chain()`, `--target` push after witnessing
+- `src/aqua/revisions.rs` — `cli_generate_aqua_chain()`, `--target` push after genesis
+- `src/main.rs` — `--forest`, `--daemon`, `--connect`, `--target`, `--trust` arg parsing
+- `src/models.rs` — `CliArgs.daemon: Option<u64>`, `.connect: Option<u64>`, `.target: Option<u64>`, `.trust: Option<(String, u8)>`
