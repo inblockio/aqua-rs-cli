@@ -540,10 +540,10 @@ async fn main() {
         return;
     }
 
-    let api_key = env::var("api_key").unwrap_or_default();
+    let alchemy_key = env::var("alchemy_key").unwrap_or_default();
     let keys_file_env = env::var("keys_file").unwrap_or_default();
 
-    let aquafier = if let Some(host) = aqua_rs_sdk::build_default_blockchain_host(&api_key) {
+    let aquafier = if let Some(host) = aqua_rs_sdk::build_default_blockchain_host(&alchemy_key) {
         Aquafier::builder().blockchain_host(host).build()
     } else {
         Aquafier::new()

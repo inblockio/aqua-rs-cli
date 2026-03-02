@@ -28,9 +28,21 @@ pub(crate) async fn cli_winess_chain(
     // Build TimestampCredentials based on witness_type
     let credentials: TimestampCredentials = match &witness_type {
         WitnessType::Eth => {
-            let api_key = std::env::var("api_key").unwrap_or_default();
             let network_str = std::env::var("aqua_network").unwrap_or("sepolia".to_string());
             let network = parse_eth_network(&network_str);
+
+            // Resolve RPC URL: explicit rpc_url takes priority, otherwise build from alchemy_key
+            let rpc_url = std::env::var("rpc_url").unwrap_or_default();
+            let rpc_url = if !rpc_url.is_empty() {
+                rpc_url
+            } else {
+                let alchemy_key = std::env::var("alchemy_key").unwrap_or_default();
+                if !alchemy_key.is_empty() {
+                    format!("https://eth-{}.g.alchemy.com/v2/{}", network_str, alchemy_key)
+                } else {
+                    String::new()
+                }
+            };
 
             if let Some(ref kf) = keys_file {
                 let creds = read_credentials(kf);
@@ -48,7 +60,7 @@ pub(crate) async fn cli_winess_chain(
                     if !mnemonic.is_empty() {
                         TimestampCredentials::Cli {
                             mnemonic,
-                            rpc_url: api_key,
+                            rpc_url: rpc_url.clone(),
                             evm_chain: network,
                         }
                     } else {

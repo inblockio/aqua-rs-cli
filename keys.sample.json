@@ -1,8 +1,11 @@
 {
+    "_comment": "You only need the keys for operations you plan to use. Remove unused sections.",
+
     "signing": {
-        "mnemonic": "<BIP39 mnemonic phrase - 12 or 24 words, used for --sign-type cli>",
-        "did_key": "<32-byte Ed25519 private key as hex, used for --sign-type did. Generate: openssl rand -hex 32>",
-        "p256_key": "<32-byte P-256 private key as hex, used for --sign-type p256. Generate: openssl rand -hex 32>"
+        "mnemonic": "<BIP39 mnemonic phrase - 12 or 24 words, used for --sign-type cli and --witness-eth>",
+        "did_key": "<0x-prefixed 32-byte Ed25519 private key hex, used for --sign-type did. Generate: openssl rand -hex 32>",
+        "p256_key": "<0x-prefixed 32-byte P-256 private key hex, used for --sign-type p256. Generate: openssl rand -hex 32>",
+        "secp256k1_key": "<0x-prefixed 32-byte secp256k1 private key hex, used for EIP-191 signing. Generate: openssl rand -hex 32>"
     },
     "timestamp": {
         "nostr_sk": "<Nostr secret key as hex or nsec bech32, used for --witness-nostr. Generate: openssl rand -hex 32>"
