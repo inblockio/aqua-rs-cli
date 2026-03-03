@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR Commercial (contact legal@inblock.io)
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::{fs, path::PathBuf};
 
 use aqua_rs_sdk::primitives::RevisionLink;
 use aqua_rs_sdk::schema::tree::Tree;
 use aqua_rs_sdk::schema::{AnyRevision, AquaTreeWrapper, FileData};
-use aqua_rs_sdk::Aquafier;
+use aqua_rs_sdk::{Aquafier, DefaultTrustStore};
 
 use crate::{
     aqua::target::push_tree_to_daemon,
@@ -19,6 +20,15 @@ extern crate serde_json_path_to_error as serde_json;
 
 pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: PathBuf) {
     let mut logs_data: Vec<String> = Vec::new();
+
+    // Attach an empty trust store so WASM compute verification runs,
+    // matching the forest.rs behaviour (even without --trust).
+    let aquafier = aquafier.with_trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())));
+
+    // Canonicalize the verify path so that bare filenames (no directory
+    // component) resolve to the current working directory instead of an
+    // empty parent path, which would silently break the directory scan.
+    let verify_path = fs::canonicalize(&verify_path).unwrap_or(verify_path);
 
     match fs::read(&verify_path) {
         Ok(body_bytes) => {
