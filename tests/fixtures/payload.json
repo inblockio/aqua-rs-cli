@@ -1,0 +1,8 @@
+{
+    "type": "file",
+    "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hash_type": "FIPS_202-SHA3-256",
+    "descriptor": "test-fixture",
+    "size": 100,
+    "content_type": "text/plain"
+}

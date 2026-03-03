@@ -7,3 +7,7 @@ keys.json
 *.log
 credentials.json
 *.db
+tests/sharness/
+tests/sharness.sh
+tests/trash directory.*
+tests/test-results

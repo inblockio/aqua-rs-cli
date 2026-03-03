@@ -23,6 +23,22 @@ cargo run --bin aqua-cli -- -a attestation.aqua.json                 # verify (d
 
 ---
 
+## Testing
+
+```bash
+# Rust integration tests (requires test_files/ fixtures)
+cargo test
+
+# Sharness shell tests (requires cargo build first)
+bash tests/install-sharness.sh              # one-time: download sharness v1.2.0
+cd tests && make test                       # run all 8 test suites (60 tests)
+./tests/test-genesis.sh -v                  # run a single test with verbose output
+```
+
+Sharness tests cover: genesis, verify, signing (cli/did/p256), delete, linking, witness (TSA/Nostr), object creation, and forest ingestion. Network-dependent tests (TSA, Nostr) degrade gracefully. Test fixtures are in `tests/fixtures/`.
+
+---
+
 ## Skills
 
 | Skill | Topic |

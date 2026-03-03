@@ -1,0 +1,2 @@
+This is a second sample file used for linking tests.
+It represents a different document in the aqua chain.

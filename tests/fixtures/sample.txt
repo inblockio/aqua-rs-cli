@@ -1,0 +1,3 @@
+This is a sample text file for aqua-cli sharness tests.
+It contains multiple lines to simulate a real document.
+Line three of the sample file.
