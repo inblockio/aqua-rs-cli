@@ -2,7 +2,7 @@
 
 test_description='Test aqua chain linking'
 
-. ./sharness.sh
+. ./sharness/sharness.sh
 
 AQUA_CLI="$SHARNESS_TEST_DIRECTORY/../target/debug/aqua-cli"
 

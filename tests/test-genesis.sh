@@ -2,7 +2,7 @@
 
 test_description='Test genesis aqua chain generation from files'
 
-. ./sharness.sh
+. ./sharness/sharness.sh
 
 AQUA_CLI="$SHARNESS_TEST_DIRECTORY/../target/debug/aqua-cli"
 

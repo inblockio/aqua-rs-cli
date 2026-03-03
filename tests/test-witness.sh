@@ -2,7 +2,7 @@
 
 test_description='Test aqua chain witnessing with TSA and Nostr'
 
-. ./sharness.sh
+. ./sharness/sharness.sh
 
 AQUA_CLI="$SHARNESS_TEST_DIRECTORY/../target/debug/aqua-cli"
 

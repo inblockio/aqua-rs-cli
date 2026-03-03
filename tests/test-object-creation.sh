@@ -2,7 +2,7 @@
 
 test_description='Test object creation with templates and payloads'
 
-. ./sharness.sh
+. ./sharness/sharness.sh
 
 AQUA_CLI="$SHARNESS_TEST_DIRECTORY/../target/debug/aqua-cli"
 
