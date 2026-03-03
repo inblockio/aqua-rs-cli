@@ -109,7 +109,36 @@ pub(crate) async fn cli_sign_chain(
         SignType::Metamask => {
             let network_str = std::env::var("aqua_network").unwrap_or("sepolia".to_string());
             let evm_chain = parse_eth_network(&network_str);
-            SigningCredentials::Metamask { evm_chain }
+
+            // Auto-detect: if keys.json has secp256k1_key, sign non-interactively
+            if let Some(ref kf) = keys_file {
+                let key_content = fs::read_to_string(kf).unwrap_or_default();
+                let val: serde_json::Value =
+                    serde_json::from_str(&key_content).unwrap_or(serde_json::Value::Null);
+                let secp256k1_key_str = val
+                    .get("secp256k1_key")
+                    .or_else(|| val.get("signing").and_then(|s| s.get("secp256k1_key")))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                let secp256k1_key_bytes = if secp256k1_key_str.starts_with("0x") {
+                    hex::decode(&secp256k1_key_str[2..]).unwrap_or_default()
+                } else if !secp256k1_key_str.is_empty() {
+                    hex::decode(secp256k1_key_str).unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+
+                if !secp256k1_key_bytes.is_empty() {
+                    SigningCredentials::Secp256k1 {
+                        secp256k1_key: secp256k1_key_bytes,
+                    }
+                } else {
+                    SigningCredentials::Metamask { evm_chain }
+                }
+            } else {
+                SigningCredentials::Metamask { evm_chain }
+            }
         }
     };
 

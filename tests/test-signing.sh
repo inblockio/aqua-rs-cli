@@ -58,14 +58,25 @@ test_expect_success 'Verify after p256 signing' '
     $AQUA_CLI -a sample.aqua.json > /dev/null 2>&1
 '
 
+# --- MetaMask / secp256k1 signing (auto-detect) ---
+
+test_expect_success 'Sign with metamask type (secp256k1 auto-detect)' '
+    $AQUA_CLI -s sample.aqua.json --sign-type metamask -k keys.json > output_metamask 2>&1 &&
+    grep -q "Successfully signed" output_metamask
+'
+
+test_expect_success 'Verify after metamask signing' '
+    $AQUA_CLI -a sample.aqua.json > /dev/null 2>&1
+'
+
 # --- Multiple signatures accumulate ---
 
 test_expect_success 'Multiple signatures accumulate revisions' '
     python3 -c "
 import json
 tree = json.load(open(\"sample.aqua.json\"))
-# genesis(2) + cli(1) + did(1) + p256(1) = 5
-assert len(tree[\"revisions\"]) >= 5, \"expected >= 5 revisions after 3 signatures, got %d\" % len(tree[\"revisions\"])
+# genesis(2) + cli(1) + did(1) + p256(1) + metamask/secp256k1(1) = 6
+assert len(tree[\"revisions\"]) >= 6, \"expected >= 6 revisions after 4 signatures, got %d\" % len(tree[\"revisions\"])
 "
 '
 
