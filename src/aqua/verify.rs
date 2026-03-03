@@ -13,7 +13,10 @@ use aqua_rs_sdk::{Aquafier, DefaultTrustStore};
 use crate::{
     aqua::target::push_tree_to_daemon,
     models::CliArgs,
-    utils::{format_method_error, oprataion_logs_and_dumps},
+    utils::{
+        colored_error, colored_success, format_method_error, format_verification_summary,
+        format_verification_summary_compact, format_verification_tree, oprataion_logs_and_dumps,
+    },
 };
 
 extern crate serde_json_path_to_error as serde_json;
@@ -36,7 +39,7 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
             let res = serde_json::from_str::<Tree>(&file_data);
 
             if res.is_err() {
-                logs_data.push("❌ Error parsing json data (check your aqua chain)".to_string());
+                logs_data.push(colored_error("❌ Error parsing json data (check your aqua chain)"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -132,15 +135,45 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
 
             match verify_result {
                 Ok(res) => {
-                    if res.is_valid {
-                        logs_data.push("✅ Successfully verified Aqua chain".to_string());
-                    } else {
-                        logs_data.push(format!("❌ Verification failed: {}", res.status));
-                    }
+                    // Filter out the SDK's final summary log (e.g. "Chain verification
+                    // passed") — we render our own summary instead.
+                    let detail_logs: Vec<_> = res
+                        .logs
+                        .iter()
+                        .filter(|l| {
+                            !(l.ident.is_none()
+                                && (l.log.contains("Chain verification passed")
+                                    || l.log.contains("Chain verification failed")))
+                        })
+                        .cloned()
+                        .collect();
 
-                    // Add detailed logs
-                    for log_entry in &res.logs {
-                        logs_data.push(log_entry.display());
+                    if args.verbose {
+                        // Verbose: colored header + tree + summary
+                        if res.is_valid {
+                            logs_data.push(colored_success(
+                                "✅ Successfully verified Aqua chain",
+                            ));
+                        } else {
+                            logs_data.push(colored_error(&format!(
+                                "❌ Verification failed: {}",
+                                res.status
+                            )));
+                        }
+
+                        let tree_lines = format_verification_tree(&detail_logs);
+                        logs_data.extend(tree_lines);
+
+                        logs_data.push(format_verification_summary(
+                            &detail_logs,
+                            res.is_valid,
+                        ));
+                    } else {
+                        // Non-verbose: single compact summary line
+                        logs_data.push(format_verification_summary_compact(
+                            &detail_logs,
+                            res.is_valid,
+                        ));
                     }
 
                     // Push to daemon if --target is set
@@ -152,7 +185,7 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
                     }
                 }
                 Err(err) => {
-                    logs_data.push("❌ Error verifying Aqua chain".to_string());
+                    logs_data.push(colored_error("❌ Error verifying Aqua chain"));
                     logs_data.extend(format_method_error(&err));
                 }
             }

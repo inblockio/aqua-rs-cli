@@ -11,8 +11,8 @@ use crate::{
     aqua::target::push_tree_to_daemon,
     models::{CliArgs, SignType},
     utils::{
-        format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials,
-        save_page_data,
+        colored_error, colored_success, format_method_error, oprataion_logs_and_dumps,
+        parse_eth_network, read_credentials, save_page_data,
     },
 };
 
@@ -31,13 +31,13 @@ pub(crate) async fn cli_sign_chain(
     let credentials: SigningCredentials = match &sign_type {
         SignType::Cli => {
             if keys_file.is_none() {
-                logs_data.push("❌ CLI signature requires keys file".to_string());
+                logs_data.push(colored_error("❌ CLI signature requires keys file"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
             let creds = read_credentials(keys_file.as_ref().unwrap());
             if creds.is_err() {
-                logs_data.push(format!("❌ {}", creds.err().unwrap()));
+                logs_data.push(colored_error(&format!("❌ {}", creds.err().unwrap())));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -45,13 +45,13 @@ pub(crate) async fn cli_sign_chain(
         }
         SignType::Did => {
             if keys_file.is_none() {
-                logs_data.push("❌ DID signature requires keys file".to_string());
+                logs_data.push(colored_error("❌ DID signature requires keys file"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
             let creds = read_credentials(keys_file.as_ref().unwrap());
             if creds.is_err() {
-                logs_data.push(format!("❌ {}", creds.err().unwrap()));
+                logs_data.push(colored_error(&format!("❌ {}", creds.err().unwrap())));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -81,7 +81,7 @@ pub(crate) async fn cli_sign_chain(
         }
         SignType::P256 => {
             if keys_file.is_none() {
-                logs_data.push("❌ P256 signature requires keys file".to_string());
+                logs_data.push(colored_error("❌ P256 signature requires keys file"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -149,7 +149,7 @@ pub(crate) async fn cli_sign_chain(
             let res = serde_json::from_str::<Tree>(&file_data);
 
             if res.is_err() {
-                logs_data.push("❌ Error parsing json data (check your aqua chain)".to_string());
+                logs_data.push(colored_error("❌ Error parsing json data (check your aqua chain)"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -165,7 +165,7 @@ pub(crate) async fn cli_sign_chain(
                 .await
             {
                 Ok(op_data) => {
-                    logs_data.push("✅ Successfully signed Aqua chain".to_string());
+                    logs_data.push(colored_success("✅ Successfully signed Aqua chain"));
 
                     let e = save_page_data(&op_data.aqua_tree, &sign_path, "aqua.json".to_string());
 
@@ -182,7 +182,7 @@ pub(crate) async fn cli_sign_chain(
                     }
                 }
                 Err(err) => {
-                    logs_data.push("❌ Error signing Aqua chain".to_string());
+                    logs_data.push(colored_error("❌ Error signing Aqua chain"));
                     logs_data.extend(format_method_error(&err));
                 }
             }

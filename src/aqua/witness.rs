@@ -10,8 +10,8 @@ use aqua_rs_sdk::Aquafier;
 use crate::aqua::target::push_tree_to_daemon;
 use crate::models::{CliArgs, WitnessType};
 use crate::utils::{
-    format_method_error, oprataion_logs_and_dumps, parse_eth_network, read_credentials,
-    save_page_data,
+    colored_error, colored_success, format_method_error, oprataion_logs_and_dumps,
+    parse_eth_network, read_credentials, save_page_data,
 };
 
 extern crate serde_json_path_to_error as serde_json;
@@ -93,7 +93,7 @@ pub(crate) async fn cli_winess_chain(
 
                 TimestampCredentials::Nostr { nostr_sk }
             } else {
-                logs_data.push("❌ Nostr witness requires keys file with nostr_sk".to_string());
+                logs_data.push(colored_error("❌ Nostr witness requires keys file with nostr_sk"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -112,7 +112,7 @@ pub(crate) async fn cli_winess_chain(
             let res = serde_json::from_str::<Tree>(&file_data);
 
             if res.is_err() {
-                logs_data.push("❌ Error parsing json data (check your aqua chain)".to_string());
+                logs_data.push(colored_error("❌ Error parsing json data (check your aqua chain)"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -128,7 +128,7 @@ pub(crate) async fn cli_winess_chain(
                 .await
             {
                 Ok(op_data) => {
-                    logs_data.push("✅ Successfully witnessed Aqua chain".to_string());
+                    logs_data.push(colored_success("✅ Successfully witnessed Aqua chain"));
 
                     let e =
                         save_page_data(&op_data.aqua_tree, &witness_path, "aqua.json".to_string());
@@ -146,7 +146,7 @@ pub(crate) async fn cli_winess_chain(
                     }
                 }
                 Err(err) => {
-                    logs_data.push("❌ Error witnessing Aqua chain".to_string());
+                    logs_data.push(colored_error("❌ Error witnessing Aqua chain"));
                     logs_data.extend(format_method_error(&err));
                 }
             }

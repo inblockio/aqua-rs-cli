@@ -6,6 +6,7 @@ use aqua_rs_sdk::primitives::EvmChain;
 use aqua_rs_sdk::schema::credentials::CredentialsFile;
 use aqua_rs_sdk::schema::tree::Tree;
 use aqua_rs_sdk::schema::{SigningCredentials, TimestampCredentials};
+use console::Style;
 use std::io::Write;
 use std::{
     fs::{self, OpenOptions},
@@ -175,24 +176,243 @@ pub fn string_to_bool(s: String) -> bool {
     }
 }
 
-pub fn log_with_emoji(logs: Vec<LogData>) -> Vec<String> {
-    let mut logs_data: Vec<String> = Vec::new();
-
-    for ele in logs {
-        let log_emoji = match ele.log_type {
-            LogType::Error | LogType::FinalError => "❌",
-            LogType::Warning => "❗",
-            LogType::Success => "✅",
-            LogType::Info => "ℹ️",
-            _ => "⭐",
-        };
-
-        logs_data.push(format!(
-            "\t\t {} {:?} : {}",
-            log_emoji, ele.log_type, ele.log
-        ));
+fn style_for_log_type(log_type: &LogType) -> Style {
+    match log_type {
+        LogType::Success => Style::new().green(),
+        LogType::Error | LogType::FinalError => Style::new().red().bold(),
+        LogType::Warning => Style::new().yellow(),
+        LogType::Info => Style::new().cyan(),
+        _ => Style::new(),
     }
-    return logs_data;
+}
+
+fn format_log_entry(entry: &LogData) -> String {
+    let emoji = entry.log_type.emoji();
+    let style = style_for_log_type(&entry.log_type);
+    if emoji.is_empty() {
+        style.apply_to(&entry.log).to_string()
+    } else {
+        format!("{} {}", emoji, style.apply_to(&entry.log))
+    }
+}
+
+pub fn log_with_emoji(logs: Vec<LogData>) -> Vec<String> {
+    logs.iter()
+        .map(|entry| format!("   {}", format_log_entry(entry)))
+        .collect()
+}
+
+/// Groups verification logs by revision and renders them as a tree with
+/// box-drawing connectors (`├─`, `│`, `└─`) and ANSI colors.
+pub fn format_verification_tree(logs: &[LogData]) -> Vec<String> {
+    let dim = Style::new().dim();
+
+    // Group logs into revision groups.
+    // A revision header is an Info entry whose ident is Some("") (empty string).
+    let mut groups: Vec<Vec<&LogData>> = Vec::new();
+    for entry in logs {
+        let is_header = entry.log_type == LogType::Info
+            && entry.ident.as_deref() == Some("");
+        if is_header {
+            // Start a new group
+            groups.push(vec![entry]);
+        } else if let Some(last) = groups.last_mut() {
+            last.push(entry);
+        } else {
+            // Orphan entry before any header — start its own group
+            groups.push(vec![entry]);
+        }
+    }
+
+    let mut lines: Vec<String> = Vec::new();
+    let total_groups = groups.len();
+
+    for (gi, group) in groups.iter().enumerate() {
+        let is_last_group = gi == total_groups - 1;
+
+        for (ei, entry) in group.iter().enumerate() {
+            let formatted = format_log_entry(entry);
+            let is_header = ei == 0;
+
+            if is_header {
+                let connector = if is_last_group { "└─" } else { "├─" };
+                lines.push(format!("{} {}", dim.apply_to(connector), formatted));
+            } else {
+                let prefix = if is_last_group { "   " } else { "│  " };
+                lines.push(format!("{} {}", dim.apply_to(prefix), formatted));
+            }
+        }
+
+        // Add a blank continuation line between groups (not after the last)
+        if !is_last_group {
+            let pipe = if gi < total_groups - 2 { "│" } else { "│" };
+            lines.push(dim.apply_to(pipe).to_string());
+        }
+    }
+
+    lines
+}
+
+/// Build a verification summary string from the log entries.
+pub fn format_verification_summary(logs: &[LogData], is_valid: bool) -> String {
+    // Count revision headers by parsing "Verifying revision type: <type>"
+    let mut anchor_count = 0usize;
+    let mut object_count = 0usize;
+    let mut signature_count = 0usize;
+    let mut witness_count = 0usize;
+    let mut other_count = 0usize;
+    let mut error_count = 0usize;
+
+    for entry in logs {
+        let is_header = entry.log_type == LogType::Info
+            && entry.ident.as_deref() == Some("");
+        if is_header {
+            let msg = entry.log.to_lowercase();
+            if msg.contains("anchor") {
+                anchor_count += 1;
+            } else if msg.contains("object") {
+                object_count += 1;
+            } else if msg.contains("signature") {
+                signature_count += 1;
+            } else if msg.contains("witness") || msg.contains("timestamp") {
+                witness_count += 1;
+            } else {
+                other_count += 1;
+            }
+        }
+        if entry.log_type == LogType::Error || entry.log_type == LogType::FinalError {
+            error_count += 1;
+        }
+    }
+
+    let total = anchor_count + object_count + signature_count + witness_count + other_count;
+    let mut parts: Vec<String> = Vec::new();
+    if anchor_count > 0 {
+        parts.push(format!("{} anchor", anchor_count));
+    }
+    if object_count > 0 {
+        parts.push(format!("{} object", object_count));
+    }
+    if signature_count > 0 {
+        parts.push(format!("{} signature", signature_count));
+    }
+    if witness_count > 0 {
+        parts.push(format!("{} witness", witness_count));
+    }
+    if other_count > 0 {
+        parts.push(format!("{} other", other_count));
+    }
+
+    let breakdown = if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", parts.join(", "))
+    };
+
+    if is_valid {
+        let success_style = Style::new().green();
+        format!(
+            "\n{}\n  Summary: {} revisions verified{} — all passed",
+            success_style.apply_to("✅ Chain verification passed"),
+            total,
+            breakdown
+        )
+    } else {
+        let error_style = Style::new().red().bold();
+        format!(
+            "\n{}\n  Summary: {} revisions checked{} — {} error(s)",
+            error_style.apply_to("❌ Verification failed"),
+            total,
+            breakdown,
+            error_count
+        )
+    }
+}
+
+/// Build a compact (non-verbose) summary line.
+pub fn format_verification_summary_compact(logs: &[LogData], is_valid: bool) -> String {
+    let mut anchor_count = 0usize;
+    let mut object_count = 0usize;
+    let mut signature_count = 0usize;
+    let mut witness_count = 0usize;
+    let mut other_count = 0usize;
+    let mut error_count = 0usize;
+
+    for entry in logs {
+        let is_header = entry.log_type == LogType::Info
+            && entry.ident.as_deref() == Some("");
+        if is_header {
+            let msg = entry.log.to_lowercase();
+            if msg.contains("anchor") {
+                anchor_count += 1;
+            } else if msg.contains("object") {
+                object_count += 1;
+            } else if msg.contains("signature") {
+                signature_count += 1;
+            } else if msg.contains("witness") || msg.contains("timestamp") {
+                witness_count += 1;
+            } else {
+                other_count += 1;
+            }
+        }
+        if entry.log_type == LogType::Error || entry.log_type == LogType::FinalError {
+            error_count += 1;
+        }
+    }
+
+    let total = anchor_count + object_count + signature_count + witness_count + other_count;
+    let mut parts: Vec<String> = Vec::new();
+    if anchor_count > 0 {
+        parts.push(format!("{} anchor", anchor_count));
+    }
+    if object_count > 0 {
+        parts.push(format!("{} object", object_count));
+    }
+    if signature_count > 0 {
+        parts.push(format!("{} signature", signature_count));
+    }
+    if witness_count > 0 {
+        parts.push(format!("{} witness", witness_count));
+    }
+    if other_count > 0 {
+        parts.push(format!("{} other", other_count));
+    }
+
+    let breakdown = if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", parts.join(", "))
+    };
+
+    if is_valid {
+        let style = Style::new().green();
+        format!(
+            "{}",
+            style.apply_to(format!(
+                "✅ Chain verification passed — {} revisions{}",
+                total, breakdown
+            ))
+        )
+    } else {
+        let style = Style::new().red().bold();
+        format!(
+            "{}",
+            style.apply_to(format!(
+                "❌ Verification failed — {} revisions{}, {} error(s)",
+                total, breakdown, error_count
+            ))
+        )
+    }
+}
+
+/// Color a success header line green.
+pub fn colored_success(msg: &str) -> String {
+    Style::new().green().apply_to(msg).to_string()
+}
+
+/// Color an error header line red bold.
+pub fn colored_error(msg: &str) -> String {
+    Style::new().red().bold().apply_to(msg).to_string()
 }
 
 pub fn oprataion_logs_and_dumps(args: CliArgs, logs_data: Vec<String>) {
@@ -217,7 +437,7 @@ pub fn oprataion_logs_and_dumps(args: CliArgs, logs_data: Vec<String>) {
 pub fn format_method_error(err: &aqua_rs_sdk::primitives::MethodError) -> Vec<String> {
     match err {
         aqua_rs_sdk::primitives::MethodError::WithLogs(logs) => log_with_emoji(logs.clone()),
-        other => vec![format!("{}", other)],
+        other => vec![colored_error(&format!("   {}", other))],
     }
 }
 
