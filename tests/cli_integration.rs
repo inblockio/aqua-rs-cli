@@ -141,7 +141,7 @@ fn generate_genesis_from_text_file() {
 
 #[test]
 fn generate_genesis_from_image() {
-    let (_tmp, _fix, aqua) = generate_genesis("img.jpeg");
+    let (_tmp, _fix, aqua) = generate_genesis("logo.png");
     let tree = read_tree(&aqua);
 
     assert_eq!(revision_count(&tree), 2);
@@ -149,8 +149,8 @@ fn generate_genesis_from_image() {
     let file_index = tree["file_index"].as_object().unwrap();
     let has_img = file_index
         .values()
-        .any(|v| v.as_str().map_or(false, |s| s.contains("img.jpeg")));
-    assert!(has_img, "file_index should reference img.jpeg");
+        .any(|v| v.as_str().map_or(false, |s| s.contains("logo.png")));
+    assert!(has_img, "file_index should reference logo.png");
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn verify_with_verbose_produces_details() {
 
 #[test]
 fn verify_image_chain() {
-    let (_tmp, _fix, aqua) = generate_genesis("img.jpeg");
+    let (_tmp, _fix, aqua) = generate_genesis("logo.png");
     assert_verify_ok(&aqua);
 }
 
@@ -440,7 +440,9 @@ fn sign_without_keys_file_uses_env() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // CLI now reads keys from env when no -k flag is given
     assert!(
-        stdout.contains("Successfully signed") || stdout.contains("❌") || stdout.contains("requires keys file"),
+        stdout.contains("Successfully signed")
+            || stdout.contains("❌")
+            || stdout.contains("requires keys file"),
         "signing without -k should either succeed (env keys) or fail gracefully: {}",
         stdout
     );
@@ -561,8 +563,8 @@ fn link_two_chains() {
     // Copy both fixtures
     fs::copy(test_files_dir().join("1.txt"), tmp.path().join("1.txt")).unwrap();
     fs::copy(
-        test_files_dir().join("img.jpeg"),
-        tmp.path().join("img.jpeg"),
+        test_files_dir().join("logo.png"),
+        tmp.path().join("logo.png"),
     )
     .unwrap();
 
@@ -575,13 +577,13 @@ fn link_two_chains() {
         .unwrap();
     cli()
         .arg("-f")
-        .arg(tmp.path().join("img.jpeg"))
+        .arg(tmp.path().join("logo.png"))
         .current_dir(tmp.path())
         .output()
         .unwrap();
 
     let chain1 = tmp.path().join("1.aqua.json");
-    let chain2 = tmp.path().join("img.aqua.json");
+    let chain2 = tmp.path().join("logo.aqua.json");
     let count_before = revision_count(&read_tree(&chain1));
 
     // Link chain2 into chain1
@@ -667,8 +669,8 @@ fn link_produces_valid_structure() {
 
     fs::copy(test_files_dir().join("1.txt"), tmp.path().join("1.txt")).unwrap();
     fs::copy(
-        test_files_dir().join("img.jpeg"),
-        tmp.path().join("img.jpeg"),
+        test_files_dir().join("logo.png"),
+        tmp.path().join("logo.png"),
     )
     .unwrap();
 
@@ -680,13 +682,13 @@ fn link_produces_valid_structure() {
         .unwrap();
     cli()
         .arg("-f")
-        .arg(tmp.path().join("img.jpeg"))
+        .arg(tmp.path().join("logo.png"))
         .current_dir(tmp.path())
         .output()
         .unwrap();
 
     let chain1 = tmp.path().join("1.aqua.json");
-    let chain2 = tmp.path().join("img.aqua.json");
+    let chain2 = tmp.path().join("logo.aqua.json");
     let count_before = revision_count(&read_tree(&chain1));
 
     let link_out = cli()
@@ -730,13 +732,13 @@ fn link_multiple_chains() {
     fs::copy(test_files_dir().join("1.txt"), tmp.path().join("1.txt")).unwrap();
     fs::copy(test_files_dir().join("2.txt"), tmp.path().join("2.txt")).unwrap();
     fs::copy(
-        test_files_dir().join("img.jpeg"),
-        tmp.path().join("img.jpeg"),
+        test_files_dir().join("logo.png"),
+        tmp.path().join("logo.png"),
     )
     .unwrap();
 
     // Generate all three chains
-    for fixture in &["1.txt", "2.txt", "img.jpeg"] {
+    for fixture in &["1.txt", "2.txt", "logo.png"] {
         let gen = cli()
             .arg("-f")
             .arg(tmp.path().join(fixture))
@@ -753,7 +755,7 @@ fn link_multiple_chains() {
 
     let parent = tmp.path().join("1.aqua.json");
     let child1 = tmp.path().join("2.aqua.json");
-    let child2 = tmp.path().join("img.aqua.json");
+    let child2 = tmp.path().join("logo.aqua.json");
     let count_before = revision_count(&read_tree(&parent));
 
     // Link both children into parent in a single command
@@ -805,7 +807,7 @@ fn link_multiple_chains() {
     let child_refs: Vec<_> = file_index
         .values()
         .filter_map(|v| v.as_str())
-        .filter(|s| *s == "2.txt" || *s == "img.jpeg")
+        .filter(|s| *s == "2.txt" || *s == "logo.png")
         .collect();
     assert!(
         child_refs.len() >= 2,
@@ -1185,7 +1187,9 @@ fn witness_nostr_without_keys_uses_env() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // CLI now reads keys from env when no -k flag is given
     assert!(
-        stdout.contains("Successfully witnessed") || stdout.contains("❌") || stdout.contains("requires keys file"),
+        stdout.contains("Successfully witnessed")
+            || stdout.contains("❌")
+            || stdout.contains("requires keys file"),
         "Nostr witness without -k should either succeed (env keys) or fail gracefully: {}",
         stdout
     );
@@ -1281,8 +1285,8 @@ fn full_workflow_generate_link_sign() {
     let tmp = TempDir::new().unwrap();
     fs::copy(test_files_dir().join("1.txt"), tmp.path().join("1.txt")).unwrap();
     fs::copy(
-        test_files_dir().join("img.jpeg"),
-        tmp.path().join("img.jpeg"),
+        test_files_dir().join("logo.png"),
+        tmp.path().join("logo.png"),
     )
     .unwrap();
     let keys = write_keys_file(tmp.path());
@@ -1296,13 +1300,13 @@ fn full_workflow_generate_link_sign() {
         .unwrap();
     cli()
         .arg("-f")
-        .arg(tmp.path().join("img.jpeg"))
+        .arg(tmp.path().join("logo.png"))
         .current_dir(tmp.path())
         .output()
         .unwrap();
 
     let chain1 = tmp.path().join("1.aqua.json");
-    let chain2 = tmp.path().join("img.aqua.json");
+    let chain2 = tmp.path().join("logo.aqua.json");
 
     // Link
     let link = cli()
