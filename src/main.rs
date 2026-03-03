@@ -540,14 +540,17 @@ async fn main() {
         return;
     }
 
-    let api_key = env::var("api_key").unwrap_or_default();
+    let alchemy_key = env::var("alchemy_key").unwrap_or_default();
     let keys_file_env = env::var("keys_file").unwrap_or_default();
 
-    let aquafier = if let Some(host) = aqua_rs_sdk::build_default_blockchain_host(&api_key) {
-        Aquafier::builder().blockchain_host(host).build()
-    } else {
-        Aquafier::new()
-    };
+    let mut builder = Aquafier::builder();
+    if let Some(host) = aqua_rs_sdk::build_default_blockchain_host(&alchemy_key) {
+        builder = builder.blockchain_host(host);
+    }
+    if let Some(host) = aqua_rs_sdk::build_default_web_host() {
+        builder = builder.web_host(host);
+    }
+    let aquafier = builder.build();
 
     let mut keys_file: Option<PathBuf> = None;
     // attempt to read argument keys, if none attempt to read from environment variables
