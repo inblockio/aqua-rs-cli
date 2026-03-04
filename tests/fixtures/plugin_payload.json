@@ -1,0 +1,16 @@
+{
+  "vendor": "test-vendor",
+  "plugin_name": "test-plugin",
+  "host_dependency_id": "aqua-daemon",
+  "trust_domain": "aqua-protocol",
+  "trait_interface": {
+    "functions": [
+      {
+        "name": "on_ingest",
+        "namespace": "lifecycle",
+        "params": ["tree"],
+        "returns": "result"
+      }
+    ]
+  }
+}

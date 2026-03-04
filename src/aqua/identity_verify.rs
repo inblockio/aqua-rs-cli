@@ -55,6 +55,10 @@ impl IdentityTemplateKind {
 
 const MAX_ATTEMPTS: u32 = 3;
 
+// Test bypass: known test values skip Twilio verification entirely
+const TEST_EMAIL: &str = "test@inblock.io";
+const TEST_PHONE: &str = "+10000000000";
+
 /// Resolve the keys file: use the provided path, or fall back to `keys.json`
 /// in the current directory.
 fn resolve_keys_file(keys_file: Option<PathBuf>) -> Option<PathBuf> {
@@ -161,16 +165,7 @@ pub async fn verify_and_create_identity_claim(
         }
     }
 
-    // 3. Load Twilio config
-    let config = TwilioConfig::from_env().map_err(|e| {
-        vec![colored_error(&format!(
-            "Twilio credentials required for {} claim verification: {}",
-            kind.label(),
-            e
-        ))]
-    })?;
-
-    // 4. Extract contact from payload
+    // 3. Extract contact from payload (moved before Twilio to enable test bypass)
     let contact = payload
         .get(kind.payload_key())
         .and_then(|v| v.as_str())
@@ -182,113 +177,140 @@ pub async fn verify_and_create_identity_claim(
         })?
         .to_string();
 
-    // 5. Send verification code
-    println!(
-        "Sending verification code to {} ({})...",
-        contact,
-        kind.label()
-    );
-    send_verification_code(&config, &contact, &kind.channel())
-        .await
-        .map_err(|e| vec![colored_error(&format!("Failed to send verification code: {}", e))])?;
-    println!("{}", colored_success("Verification code sent."));
+    // 4. Test bypass: skip Twilio verification for known test values
+    let is_test_value = contact == TEST_EMAIL || contact == TEST_PHONE;
 
-    // 6. Interactive verification loop
-    println!();
-    println!("Enter the verification code (or 'resend' to resend, 'quit' to abort):");
+    if is_test_value {
+        println!(
+            "Test mode: skipping Twilio verification for {}",
+            contact
+        );
+    } else {
+        // 5. Load Twilio config
+        let config = TwilioConfig::from_env().map_err(|e| {
+            vec![colored_error(&format!(
+                "Twilio credentials required for {} claim verification: {}",
+                kind.label(),
+                e
+            ))]
+        })?;
 
-    let stdin = io::stdin();
-    let mut approved = false;
-    let mut attempts = 0u32;
+        // 6. Send verification code
+        println!(
+            "Sending verification code to {} ({})...",
+            contact,
+            kind.label()
+        );
+        send_verification_code(&config, &contact, &kind.channel())
+            .await
+            .map_err(|e| {
+                vec![colored_error(&format!(
+                    "Failed to send verification code: {}",
+                    e
+                ))]
+            })?;
+        println!("{}", colored_success("Verification code sent."));
 
-    while attempts < MAX_ATTEMPTS {
-        print!("code> ");
-        io::stdout().flush().ok();
+        // 7. Interactive verification loop
+        println!();
+        println!("Enter the verification code (or 'resend' to resend, 'quit' to abort):");
 
-        let mut input = String::new();
-        match stdin.read_line(&mut input) {
-            Ok(0) => {
-                // EOF
-                println!();
-                return Err(vec![colored_error("Aborted (EOF).")]);
-            }
-            Ok(_) => {}
-            Err(e) => {
-                return Err(vec![colored_error(&format!("Error reading input: {}", e))]);
-            }
-        }
+        let stdin = io::stdin();
+        let mut approved = false;
+        let mut attempts = 0u32;
 
-        let trimmed = input.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
+        while attempts < MAX_ATTEMPTS {
+            print!("code> ");
+            io::stdout().flush().ok();
 
-        if trimmed == "quit" || trimmed == "exit" {
-            return Err(vec![colored_error("Verification aborted by user.")]);
-        }
-
-        if trimmed == "resend" {
-            println!("Resending verification code...");
-            send_verification_code(&config, &contact, &kind.channel())
-                .await
-                .map_err(|e| {
-                    vec![colored_error(&format!(
-                        "Failed to resend verification code: {}",
+            let mut input = String::new();
+            match stdin.read_line(&mut input) {
+                Ok(0) => {
+                    // EOF
+                    println!();
+                    return Err(vec![colored_error("Aborted (EOF).")]);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(vec![colored_error(&format!(
+                        "Error reading input: {}",
                         e
-                    ))]
-                })?;
-            println!("{}", colored_success("Verification code resent."));
-            // Don't count resend as an attempt
-            continue;
-        }
-
-        attempts += 1;
-
-        match check_verification_code(&config, &contact, trimmed).await {
-            Ok(true) => {
-                approved = true;
-                println!("{}", colored_success("Code verified successfully."));
-                break;
+                    ))]);
+                }
             }
-            Ok(false) => {
-                let remaining = MAX_ATTEMPTS - attempts;
-                if remaining > 0 {
+
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            if trimmed == "quit" || trimmed == "exit" {
+                return Err(vec![colored_error("Verification aborted by user.")]);
+            }
+
+            if trimmed == "resend" {
+                println!("Resending verification code...");
+                send_verification_code(&config, &contact, &kind.channel())
+                    .await
+                    .map_err(|e| {
+                        vec![colored_error(&format!(
+                            "Failed to resend verification code: {}",
+                            e
+                        ))]
+                    })?;
+                println!("{}", colored_success("Verification code resent."));
+                // Don't count resend as an attempt
+                continue;
+            }
+
+            attempts += 1;
+
+            match check_verification_code(&config, &contact, trimmed).await {
+                Ok(true) => {
+                    approved = true;
+                    println!("{}", colored_success("Code verified successfully."));
+                    break;
+                }
+                Ok(false) => {
+                    let remaining = MAX_ATTEMPTS - attempts;
+                    if remaining > 0 {
+                        eprintln!(
+                            "{}",
+                            colored_error(&format!(
+                                "Invalid code. {} attempt{} remaining.",
+                                remaining,
+                                if remaining == 1 { "" } else { "s" }
+                            ))
+                        );
+                    }
+                }
+                Err(e) => {
+                    let remaining = MAX_ATTEMPTS - attempts;
+                    eprintln!(
+                        "{}",
+                        colored_error(&format!("Verification check failed: {}", e))
+                    );
+                    if remaining == 0 {
+                        break;
+                    }
                     eprintln!(
                         "{}",
                         colored_error(&format!(
-                            "Invalid code. {} attempt{} remaining.",
+                            "{} attempt{} remaining.",
                             remaining,
                             if remaining == 1 { "" } else { "s" }
                         ))
                     );
                 }
             }
-            Err(e) => {
-                let remaining = MAX_ATTEMPTS - attempts;
-                eprintln!(
-                    "{}",
-                    colored_error(&format!("Verification check failed: {}", e))
-                );
-                if remaining == 0 {
-                    break;
-                }
-                eprintln!(
-                    "{}",
-                    colored_error(&format!(
-                        "{} attempt{} remaining.",
-                        remaining,
-                        if remaining == 1 { "" } else { "s" }
-                    ))
-                );
-            }
         }
-    }
 
-    if !approved {
-        return Err(vec![colored_error(&format!(
-            "Verification failed after {} attempts. Aborting.",
-            MAX_ATTEMPTS
-        ))]);
+        if !approved {
+            return Err(vec![colored_error(&format!(
+                "Verification failed after {} attempts. Aborting.",
+                MAX_ATTEMPTS
+            ))]);
+        }
     }
 
     // 7. Create genesis object tree
