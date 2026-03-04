@@ -585,7 +585,7 @@ async fn main() {
 
     if args.create_object {
         println!("Creating genesis object revision");
-        cli_create_object(args.clone(), &aquafier);
+        cli_create_object(args.clone(), &aquafier, keys_file.clone()).await;
         return;
     }
 
