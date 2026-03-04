@@ -710,6 +710,7 @@ dependencies = [
  "env_logger",
  "getrandom 0.3.4",
  "hex",
+ "jsonschema",
  "once_cell",
  "p256",
  "rand 0.8.5",

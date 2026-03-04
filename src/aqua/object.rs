@@ -4,12 +4,13 @@ use std::path::{Path, PathBuf};
 use aqua_rs_sdk::primitives::RevisionLink;
 use aqua_rs_sdk::schema::template::BuiltInTemplate;
 use aqua_rs_sdk::schema::templates::{
-    AccessGrant, AliasRegistration, Attestation, EvmTimestampPayload, File, MultiSigner,
-    PlatformIdentityClaim, PluginRegistration, TemplateRegistration, TrustAssertion,
-    VendorRegistration, WalletIdentification,
+    AccessGrant, AliasRegistration, Attestation, DnsClaim, EmailClaim, EvmTimestampPayload, File,
+    MultiSigner, NameClaim, PhoneClaim, PlatformIdentityClaim, PluginRegistration,
+    TemplateRegistration, TrustAssertion, VendorRegistration, WalletIdentification,
 };
 use aqua_rs_sdk::Aquafier;
 
+use crate::aqua::identity_verify::{verify_and_create_identity_claim, IdentityTemplateKind};
 use crate::models::CliArgs;
 use crate::utils::{oprataion_logs_and_dumps, save_page_data};
 
@@ -50,38 +51,108 @@ fn resolve_template_name(name: &str) -> Result<RevisionLink, String> {
         "plugin-registration" => Ok(template_link_to_revision_link(
             &PluginRegistration::TEMPLATE_LINK,
         )),
+        "email" => Ok(template_link_to_revision_link(&EmailClaim::TEMPLATE_LINK)),
+        "phone" => Ok(template_link_to_revision_link(&PhoneClaim::TEMPLATE_LINK)),
+        "name" => Ok(template_link_to_revision_link(&NameClaim::TEMPLATE_LINK)),
+        "domain" => Ok(template_link_to_revision_link(&DnsClaim::TEMPLATE_LINK)),
         _ => Err(format!("Unknown template name: {}", name)),
     }
 }
 
+/// Check whether a resolved template hash corresponds to a verifiable identity
+/// template (email or phone). Returns the kind if it does.
+fn is_identity_verifiable_template(hash: &RevisionLink) -> Option<IdentityTemplateKind> {
+    let email_link = template_link_to_revision_link(&EmailClaim::TEMPLATE_LINK);
+    let phone_link = template_link_to_revision_link(&PhoneClaim::TEMPLATE_LINK);
+
+    if *hash == email_link {
+        Some(IdentityTemplateKind::Email)
+    } else if *hash == phone_link {
+        Some(IdentityTemplateKind::Phone)
+    } else {
+        None
+    }
+}
+
+/// Extract required and optional field names from a template's JSON schema.
+fn extract_template_fields(template_json: &str) -> (Vec<String>, Vec<String>) {
+    let val: serde_json::Value = match serde_json::from_str(template_json) {
+        Ok(v) => v,
+        Err(_) => return (vec![], vec![]),
+    };
+
+    let schema = match val.get("schema") {
+        Some(s) => s,
+        None => return (vec![], vec![]),
+    };
+
+    let required: Vec<String> = schema
+        .get("required")
+        .and_then(|r| r.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let all_props: Vec<String> = schema
+        .get("properties")
+        .and_then(|p| p.as_object())
+        .map(|obj| obj.keys().cloned().collect())
+        .unwrap_or_default();
+
+    let optional: Vec<String> = all_props
+        .into_iter()
+        .filter(|k| !required.contains(k))
+        .collect();
+
+    (required, optional)
+}
+
 /// CLI handler for `--list-templates`.
-/// Prints all built-in template names, hashes, and their fields.
+/// Prints all built-in template names, hashes, and their required/optional fields.
 pub(crate) fn cli_list_templates() {
-    let templates: &[(&str, &[u8; 32])] = &[
-        ("file", &File::TEMPLATE_LINK),
-        ("attestation", &Attestation::TEMPLATE_LINK),
-        ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK),
-        ("timestamp", &EvmTimestampPayload::TEMPLATE_LINK),
-        ("multi-signer", &MultiSigner::TEMPLATE_LINK),
-        ("trust-assertion", &TrustAssertion::TEMPLATE_LINK),
-        ("wallet-identification", &WalletIdentification::TEMPLATE_LINK),
-        ("access-grant", &AccessGrant::TEMPLATE_LINK),
-        ("vendor-registration", &VendorRegistration::TEMPLATE_LINK),
-        ("template-registration", &TemplateRegistration::TEMPLATE_LINK),
-        ("alias-registration", &AliasRegistration::TEMPLATE_LINK),
-        ("plugin-registration", &PluginRegistration::TEMPLATE_LINK),
+    let templates: &[(&str, &[u8; 32], &str)] = &[
+        ("file", &File::TEMPLATE_LINK, File::TEMPLATE_JSON),
+        ("attestation", &Attestation::TEMPLATE_LINK, Attestation::TEMPLATE_JSON),
+        ("platform-identity", &PlatformIdentityClaim::TEMPLATE_LINK, PlatformIdentityClaim::TEMPLATE_JSON),
+        ("timestamp", &EvmTimestampPayload::TEMPLATE_LINK, EvmTimestampPayload::TEMPLATE_JSON),
+        ("multi-signer", &MultiSigner::TEMPLATE_LINK, MultiSigner::TEMPLATE_JSON),
+        ("trust-assertion", &TrustAssertion::TEMPLATE_LINK, TrustAssertion::TEMPLATE_JSON),
+        ("wallet-identification", &WalletIdentification::TEMPLATE_LINK, WalletIdentification::TEMPLATE_JSON),
+        ("access-grant", &AccessGrant::TEMPLATE_LINK, AccessGrant::TEMPLATE_JSON),
+        ("vendor-registration", &VendorRegistration::TEMPLATE_LINK, VendorRegistration::TEMPLATE_JSON),
+        ("template-registration", &TemplateRegistration::TEMPLATE_LINK, TemplateRegistration::TEMPLATE_JSON),
+        ("alias-registration", &AliasRegistration::TEMPLATE_LINK, AliasRegistration::TEMPLATE_JSON),
+        ("plugin-registration", &PluginRegistration::TEMPLATE_LINK, PluginRegistration::TEMPLATE_JSON),
+        ("email", &EmailClaim::TEMPLATE_LINK, EmailClaim::TEMPLATE_JSON),
+        ("phone", &PhoneClaim::TEMPLATE_LINK, PhoneClaim::TEMPLATE_JSON),
+        ("name", &NameClaim::TEMPLATE_LINK, NameClaim::TEMPLATE_JSON),
+        ("domain", &DnsClaim::TEMPLATE_LINK, DnsClaim::TEMPLATE_JSON),
     ];
 
     println!("Built-in Templates:\n");
-    for (name, link_bytes) in templates {
+    for (name, link_bytes, json) in templates {
         let rev = template_link_to_revision_link(link_bytes);
         println!("  {} ({})", name, rev);
+        let (required, optional) = extract_template_fields(json);
+        if !required.is_empty() {
+            println!("    Required: {}", required.join(", "));
+        }
+        if !optional.is_empty() {
+            println!("    Optional: {}", optional.join(", "));
+        }
         println!();
     }
 }
 
 /// CLI handler for `--create-object`.
-pub(crate) fn cli_create_object(args: CliArgs, aquafier: &Aquafier) {
+pub(crate) async fn cli_create_object(
+    args: CliArgs,
+    aquafier: &Aquafier,
+    keys_file: Option<PathBuf>,
+) {
     let mut logs_data: Vec<String> = Vec::new();
 
     // 1. Resolve template hash
@@ -160,6 +231,28 @@ pub(crate) fn cli_create_object(args: CliArgs, aquafier: &Aquafier) {
             }
         }
     };
+
+    // 2b. Check if this is a verifiable identity template (email or phone)
+    if let Some(kind) = is_identity_verifiable_template(&template_hash) {
+        match verify_and_create_identity_claim(
+            &args,
+            aquafier,
+            template_hash,
+            payload,
+            kind,
+            keys_file,
+            source_path,
+        )
+        .await
+        {
+            Ok(()) => {}
+            Err(err_logs) => {
+                logs_data.extend(err_logs);
+                oprataion_logs_and_dumps(args, logs_data);
+            }
+        }
+        return;
+    }
 
     // 3. Call aquafier.create_object (genesis: no previous tree, default method)
     match aquafier.create_object(template_hash, None, payload, None) {
