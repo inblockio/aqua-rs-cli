@@ -138,7 +138,29 @@ pub async fn verify_and_create_identity_claim(
         println!("Derived signer_did: {}", did);
     }
 
-    // 2. Load Twilio config
+    // 2. Validate payload against template schema before any network calls
+    if let Some(template) = aqua_rs_sdk::core::resolve_builtin_template(&template_hash) {
+        let validator = jsonschema::validator_for(template.schema()).map_err(|e| {
+            vec![colored_error(&format!(
+                "Failed to compile template schema: {}",
+                e
+            ))]
+        })?;
+        if !validator.is_valid(&payload) {
+            let errors: Vec<String> = jsonschema::validator_for(template.schema())
+                .unwrap()
+                .iter_errors(&payload)
+                .map(|e| format!("  - {}", e))
+                .collect();
+            return Err(vec![colored_error(&format!(
+                "Payload does not match {} template schema:\n{}",
+                kind.label(),
+                errors.join("\n")
+            ))]);
+        }
+    }
+
+    // 3. Load Twilio config
     let config = TwilioConfig::from_env().map_err(|e| {
         vec![colored_error(&format!(
             "Twilio credentials required for {} claim verification: {}",
@@ -147,7 +169,7 @@ pub async fn verify_and_create_identity_claim(
         ))]
     })?;
 
-    // 3. Extract contact from payload
+    // 4. Extract contact from payload
     let contact = payload
         .get(kind.payload_key())
         .and_then(|v| v.as_str())
@@ -159,7 +181,7 @@ pub async fn verify_and_create_identity_claim(
         })?
         .to_string();
 
-    // 4. Send verification code
+    // 5. Send verification code
     println!(
         "Sending verification code to {} ({})...",
         contact,
@@ -170,7 +192,7 @@ pub async fn verify_and_create_identity_claim(
         .map_err(|e| vec![colored_error(&format!("Failed to send verification code: {}", e))])?;
     println!("{}", colored_success("Verification code sent."));
 
-    // 5. Interactive verification loop
+    // 6. Interactive verification loop
     println!();
     println!("Enter the verification code (or 'resend' to resend, 'quit' to abort):");
 
@@ -268,7 +290,7 @@ pub async fn verify_and_create_identity_claim(
         ))]);
     }
 
-    // 6. Create genesis object tree
+    // 7. Create genesis object tree
     let mut logs_data: Vec<String> = Vec::new();
 
     let tree = aquafier
@@ -284,7 +306,7 @@ pub async fn verify_and_create_identity_claim(
         kind.label()
     )));
 
-    // 7. Auto-sign if keys_file is available
+    // 8. Auto-sign if keys_file is available
     if let Some(ref kf) = keys_file {
         let creds = read_credentials(kf).map_err(|e| vec![colored_error(&e)])?;
 
