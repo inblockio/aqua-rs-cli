@@ -241,6 +241,7 @@ pub(crate) async fn cli_create_object(
             payload,
             kind,
             keys_file,
+            source_path,
         )
         .await
         {

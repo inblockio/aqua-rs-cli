@@ -115,6 +115,7 @@ pub async fn verify_and_create_identity_claim(
     mut payload: serde_json::Value,
     kind: IdentityTemplateKind,
     keys_file: Option<PathBuf>,
+    source_path: Option<PathBuf>,
 ) -> Result<(), Vec<String>> {
     // 0. Resolve keys file (explicit arg → ./keys.json fallback)
     let keys_file = resolve_keys_file(keys_file);
@@ -329,7 +330,16 @@ pub async fn verify_and_create_identity_claim(
                 )));
 
                 // Save signed tree
-                let save_path = PathBuf::from(format!("{}_claim", kind.label()));
+                let save_path = match source_path {
+                    Some(ref p) => {
+                        if p.extension().map_or(false, |ext| ext == "json") {
+                            p.with_extension("")
+                        } else {
+                            p.clone()
+                        }
+                    }
+                    None => PathBuf::from(format!("{}_claim", kind.label())),
+                };
                 let e = save_page_data(&op_data.aqua_tree, &save_path, "aqua.json".to_string());
                 if let Err(err) = e {
                     logs_data.push(format!("Error saving page data: {}", err));
@@ -352,7 +362,16 @@ pub async fn verify_and_create_identity_claim(
         }
     } else {
         // Save unsigned tree
-        let save_path = PathBuf::from(format!("{}_claim", kind.label()));
+        let save_path = match source_path {
+            Some(ref p) => {
+                if p.extension().map_or(false, |ext| ext == "json") {
+                    p.with_extension("")
+                } else {
+                    p.clone()
+                }
+            }
+            None => PathBuf::from(format!("{}_claim", kind.label())),
+        };
         let e = save_page_data(&tree, &save_path, "aqua.json".to_string());
         if let Err(err) = e {
             logs_data.push(format!("Error saving page data: {}", err));
