@@ -132,7 +132,7 @@ pub fn save_page_data(
         Ok(json_data) => {
             // Write JSON data to the determined file path
             fs::write(&output_path, json_data).map_err(|e| e.to_string())?;
-            println!("Aqua chain data saved to: {:?}", output_path);
+            println!("Aqua tree saved to: {:?}", output_path);
             Ok(())
         }
         Err(e) => Err(format!("Error serializing Tree: {}", e)),
@@ -146,6 +146,32 @@ pub fn is_valid_json_file(s: &str) -> Result<String, String> {
     } else {
         Err("Invalid JSON file path".to_string())
     }
+}
+
+/// Resolve an Aqua tree file path, auto-detecting `.aqua.json` extension.
+///
+/// If `s` doesn't point to an existing `.aqua.json` file, tries appending
+/// `.aqua.json` (e.g. `README.md` → `README.md.aqua.json`).
+pub fn resolve_aqua_file(s: &str) -> Result<String, String> {
+    let path = PathBuf::from(s);
+    // If already a valid .aqua.json file, use directly
+    if path.exists() && path.is_file() && s.ends_with(".aqua.json") {
+        return Ok(s.to_string());
+    }
+    // Try appending .aqua.json
+    let aqua_path = format!("{}.aqua.json", s);
+    let aqua_pb = PathBuf::from(&aqua_path);
+    if aqua_pb.exists() && aqua_pb.is_file() {
+        return Ok(aqua_path);
+    }
+    // Fall back to original json validation
+    if path.exists() && path.is_file() && path.extension().unwrap_or_default() == "json" {
+        return Ok(s.to_string());
+    }
+    Err(format!(
+        "File not found: '{}' (also tried '{}.aqua.json')",
+        s, s
+    ))
 }
 
 pub fn is_valid_file(s: &str) -> Result<String, String> {
@@ -313,7 +339,7 @@ pub fn format_verification_summary(logs: &[LogData], is_valid: bool) -> String {
         let success_style = Style::new().green();
         format!(
             "\n{}\n  Summary: {} revisions verified{} — all passed",
-            success_style.apply_to("✅ Chain verification passed"),
+            success_style.apply_to("✅ Tree verification passed"),
             total,
             breakdown
         )
@@ -389,7 +415,7 @@ pub fn format_verification_summary_compact(logs: &[LogData], is_valid: bool) -> 
         format!(
             "{}",
             style.apply_to(format!(
-                "✅ Chain verification passed — {} revisions{}",
+                "✅ Tree verification passed — {} revisions{}",
                 total, breakdown
             ))
         )

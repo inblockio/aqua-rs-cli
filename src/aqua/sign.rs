@@ -149,7 +149,7 @@ pub(crate) async fn cli_sign_chain(
             let res = serde_json::from_str::<Tree>(&file_data);
 
             if res.is_err() {
-                logs_data.push(colored_error("❌ Error parsing json data (check your aqua chain)"));
+                logs_data.push(colored_error("❌ Error parsing json data (check your Aqua tree file)"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -165,7 +165,7 @@ pub(crate) async fn cli_sign_chain(
                 .await
             {
                 Ok(op_data) => {
-                    logs_data.push(colored_success("✅ Successfully signed Aqua chain"));
+                    logs_data.push(colored_success("✅ Successfully signed Aqua tree"));
 
                     let e = save_page_data(&op_data.aqua_tree, &sign_path, "aqua.json".to_string());
 
@@ -182,7 +182,7 @@ pub(crate) async fn cli_sign_chain(
                     }
                 }
                 Err(err) => {
-                    logs_data.push(colored_error("❌ Error signing Aqua chain"));
+                    logs_data.push(colored_error("❌ Error signing Aqua tree"));
                     logs_data.extend(format_method_error(&err));
                 }
             }

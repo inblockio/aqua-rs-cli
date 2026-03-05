@@ -74,7 +74,7 @@ pub(crate) fn cli_link_chain(
     match aquafier.link_aqua_tree(parent_wrapper, child_wrappers, None) {
         Ok(linked_tree) => {
             logs_data.push(format!(
-                "✅ Successfully linked {} child chain(s) into parent",
+                "✅ Successfully linked {} child tree(s) into parent",
                 child_count
             ));
 
@@ -89,7 +89,7 @@ pub(crate) fn cli_link_chain(
             }
         }
         Err(err) => {
-            logs_data.push("❌ Error linking Aqua chains".to_string());
+            logs_data.push("❌ Error linking Aqua trees".to_string());
             logs_data.extend(format_method_error(&err));
         }
     }

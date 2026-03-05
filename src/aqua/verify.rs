@@ -39,7 +39,7 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
             let res = serde_json::from_str::<Tree>(&file_data);
 
             if res.is_err() {
-                logs_data.push(colored_error("❌ Error parsing json data (check your aqua chain)"));
+                logs_data.push(colored_error("❌ Error parsing json data (check your Aqua tree file)"));
                 oprataion_logs_and_dumps(args, logs_data);
                 return;
             }
@@ -152,7 +152,7 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
                         // Verbose: colored header + tree + summary
                         if res.is_valid {
                             logs_data.push(colored_success(
-                                "✅ Successfully verified Aqua chain",
+                                "✅ Successfully verified Aqua tree",
                             ));
                         } else {
                             logs_data.push(colored_error(&format!(
@@ -185,7 +185,7 @@ pub async fn cli_verify_chain(args: CliArgs, aquafier: &Aquafier, verify_path: P
                     }
                 }
                 Err(err) => {
-                    logs_data.push(colored_error("❌ Error verifying Aqua chain"));
+                    logs_data.push(colored_error("❌ Error verifying Aqua tree"));
                     logs_data.extend(format_method_error(&err));
                 }
             }

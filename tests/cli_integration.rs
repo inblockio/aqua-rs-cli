@@ -1055,7 +1055,7 @@ fn info_flag_shows_description() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("Aqua CLI TOOL"),
+        stdout.contains("Aqua CLI"),
         "info should show CLI title: {}",
         stdout
     );

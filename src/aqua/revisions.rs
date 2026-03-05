@@ -14,7 +14,7 @@ use crate::utils::{
     save_page_data,
 };
 
-/// Removes the last revision from an Aqua chain file.
+/// Removes the last revision from an Aqua tree file.
 pub fn cli_remove_revisions_from_aqua_chain(
     args: CliArgs,
     aquafier: &Aquafier,
@@ -43,7 +43,7 @@ pub fn cli_remove_revisions_from_aqua_chain(
 
     match aquafier.delete_last_revision(wrapper) {
         Ok(updated_tree) => {
-            logs_data.push("✅ Successfully removed last revision from Aqua chain".to_string());
+            logs_data.push("✅ Successfully removed last revision from Aqua tree".to_string());
 
             let e = save_page_data(
                 &updated_tree,
@@ -64,7 +64,7 @@ pub fn cli_remove_revisions_from_aqua_chain(
     oprataion_logs_and_dumps(args, logs_data);
 }
 
-/// Generates an Aqua chain (genesis revision) from a given file.
+/// Generates an Aqua tree (genesis revision) from a given file.
 pub async fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
     let mut logs_data: Vec<String> = Vec::new();
 
@@ -78,7 +78,7 @@ pub async fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
                     let genesis_result = aquafier.create_genesis_revision(file_data, None);
                     match genesis_result {
                         Ok(tree) => {
-                            logs_data.push("✅ Successfully generated Aqua chain".to_string());
+                            logs_data.push("✅ Successfully generated Aqua tree".to_string());
 
                             let e = save_page_data(&tree, &file_path, "aqua.json".to_string());
 
@@ -95,7 +95,7 @@ pub async fn cli_generate_aqua_chain(args: CliArgs, aquafier: &Aquafier) {
                             }
                         }
                         Err(err) => {
-                            logs_data.push("❌ Error generating Aqua chain".to_string());
+                            logs_data.push("❌ Error generating Aqua tree".to_string());
                             logs_data.extend(format_method_error(&err));
                         }
                     }

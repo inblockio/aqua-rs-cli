@@ -20,95 +20,69 @@ use aqua::{revisions::cli_generate_aqua_chain, revisions::cli_remove_revisions_f
 use aqua_rs_sdk::Aquafier;
 use clap::{Arg, ArgAction, ArgGroup, Command};
 use std::{env, path::PathBuf};
-use utils::{is_valid_file, is_valid_json_file, is_valid_output_file};
+use utils::{is_valid_file, is_valid_json_file, is_valid_output_file, resolve_aqua_file};
 
-const BASE_LONG_ABOUT: &str = r#"Aqua CLI TOOL
+const BASE_LONG_ABOUT: &str = r#"Aqua CLI — verify, sign, witness, and generate Aqua trees using the Aqua Protocol
 
-========================================================
-
-This tool validates files using an aqua protocol. It can:
-  * Verify aqua chain json file
-  * Generate aqua chain.
-  * Generate validation reports
+USAGE:
+    aqua-cli <COMMAND> [OPTIONS]
 
 COMMANDS:
-   * -a  or --authenticate  to verify an aqua json file.
-   * -s or --sign to sign an aqua json file with options [cli|metamask|did|p256].
-   * -w or --witness to witness an aqua json file with options [--witness-eth, --witness-nostr, --witness-tsa].
-   * -f or --file to generate an aqua json file.
-   * -v or --verbose  to provide logs about the process when using -v,-s,-w or -f command (verbose option).
-   * -o or --output to save the output to a file (json, html or pdf).
-   * -l  or --level  define how strict the validation should be 1 or 2
-        1: Strict validation (does look up, if local wallet mnemonic fails it panic).
-        2: Standard validation (create a new mnemonic if one in keys.json fails).
-   * -h or --help to show usage, about aqua-cli.
-   * -i or --info to show the cli version.
-   * -k or --key-file to specify the file containing keys (this can also be set in the env).
-   * -d or --delete remove revision from an aqua json file, by default removes the last revision.
-   * --link to link files (requires parent + one or more child filenames/paths).
-   * --previous-hash to target a specific revision instead of the latest (enables tree/DAG structures).
-   * --create-object to create a genesis object revision with a custom template and JSON payload.
-       Requires --template-name <NAME> or --template-hash <HASH>, and --payload <PATH_OR_JSON>.
-   * --list-templates to list all available built-in templates with their hashes.
-   * --forest to ingest one or more .aqua.json files into an ephemeral in-memory forest
-       with cross-tree resolution (attestation→claim, template dependencies).
-       Displays node counts, genesis trees, tip revisions, and unresolved L3 deps.
-       Use --trust <DID> <LEVEL> to populate the trust store (enables WASM verification).
-       Use -v (--verbose) to print per-node details.
-   * --daemon [SECONDS] to keep the forest alive as a persistent daemon (default 600s idle timeout).
-       Requires --forest. Opens a REPL on stdin and a Unix socket for IPC.
-   * --connect <ID> to connect to a running daemon's REPL via Unix socket.
-   * --target <ID> to push operation results into a running daemon's forest.
-       Modifier for -a, -s, -w, -f.
+    -a, --authenticate <FILE>   Verify an Aqua tree file (.aqua.json auto-detected)
+    -s, --sign <FILE>           Sign an Aqua tree file (requires --sign-type)
+    -w, --witness <FILE>        Witness an Aqua tree file (requires --witness-eth, --witness-nostr, or --witness-tsa)
+    -f, --file <FILE>           Generate a new Aqua tree from a file
+    -d, --delete <FILE>         Remove the last revision from an Aqua tree file
+    --link <PARENT> <CHILD...>  Link child trees into a parent tree
+    --create-object             Create a genesis object revision (requires --template-name or --template-hash, and --payload)
+    --list-templates            List all available built-in templates with their hashes
+    --forest <FILES...>         Ingest .aqua.json files into an ephemeral in-memory forest
+    --connect <ID>              Connect to a running forest daemon via Unix socket
+    -i, --info                  Show detailed CLI information
+
+MODIFIERS:
+    -k, --keys-file <FILE>      Keys file (JSON) containing mnemonic, nostr_sk, did:key, etc.
+    -o, --output <FILE>         Save output to a file (.json, .html, or .pdf)
+    -v, --verbose               Show detailed logs
+    -l, --level <1|2>           Validation strictness: 1 = strict, 2 = standard (default: 2)
+    --sign-type <TYPE>          Signing method: cli, metamask, did, or p256
+    --previous-hash <HASH>      Target a specific revision (enables tree/DAG branching)
+    --trust <DID> <LEVEL>       Populate trust store for forest verification (1=marginal, 2=full, 3=ultimate)
+    --daemon [SECONDS]          Keep forest alive as persistent daemon (default: 600s idle timeout)
+    --target <ID>               Push operation results into a running daemon's forest
+
+    The .aqua.json extension is auto-detected: `aqua-cli -a README.md` will find README.md.aqua.json.
 
 EXAMPLES:
-    aqua-cli -a chain.json
-    aqua-cli -s chain.json --sign-type cli --output report.json
-    aqua-cli -w chain.json --witness-eth --output report.json
+    # Verify an Aqua tree (auto-detects .aqua.json extension):
+    aqua-cli -a README.md
+    aqua-cli -a document.aqua.json -v
 
+    # Generate an Aqua tree from a file:
     aqua-cli -f document.pdf
-    aqua-cli --file image.png --verbose
-    aqua-cli -f document.json --output report.json
+    aqua-cli -f image.png --verbose
 
+    # Sign and witness:
+    aqua-cli -s tree.aqua.json --sign-type cli -k keys.json
+    aqua-cli -w tree.aqua.json --witness-tsa
+
+    # Link child trees into a parent:
     aqua-cli --link parent.aqua.json child.aqua.json
-    aqua-cli --link parent.aqua.json child1.aqua.json child2.aqua.json
 
-    # Sign targeting a specific revision (enables tree/DAG branching):
-    aqua-cli -s chain.json --sign-type cli -k keys.json --previous-hash 0x<revision_hash>
-    # Witness targeting a specific revision:
-    aqua-cli -w chain.json --witness-tsa --previous-hash 0x<revision_hash>
+    # Tree/DAG branching with --previous-hash:
+    aqua-cli -s tree.aqua.json --sign-type cli -k keys.json --previous-hash 0x<hash>
 
-    # Create object with a built-in template name:
-    aqua-cli --create-object --template-name domain --payload domain_data.json
-    # Create object with inline JSON:
-    aqua-cli --create-object --template-name name --payload '{"first_name": "Alice", "last_name": "Smith"}'
-    # Create object with a custom template hash:
-    aqua-cli --create-object --template-hash 0x<hash> --payload data.json
+    # Create object with a built-in template:
+    aqua-cli --create-object --template-name domain --payload data.json
 
     # Ephemeral forest with cross-tree resolution:
     aqua-cli --forest dir/*.aqua.json -v
-    # Forest with trusted DID (enables WASM compute verification):
-    aqua-cli --forest dir/*.aqua.json --trust did:pkh:p256:0x02... 2
 
-    # Start a persistent forest daemon (600s idle timeout):
+    # Persistent forest daemon:
     aqua-cli --forest dir/*.aqua.json --daemon
-    # Daemon with custom timeout and trust store:
-    aqua-cli --forest dir/*.aqua.json --daemon 300 --trust did:pkh:... 2
-    # Connect to a running daemon from another terminal:
     aqua-cli --connect 12345
-    # Push a verification result into a running daemon:
-    aqua-cli -a newfile.aqua.json --target 12345
-
-SUMMARY
-   * aqua-cli expects at least one parameter -s,-v,-w or -f.
-   * in your environment set the
-    1. aqua_domain="random_alphanumeric".
-    2. aqua_network="sepolia" or "holesky" or "mainnet".
-    3. verification_platform="alchemy" or "infura" or "none" for witnessing (default "none").
-    4. aqua_alchemy_look_up= false or true.
 
 For more information, visit: https://github.com/inblockio/aqua-cli-rs
-
 "#;
 
 pub fn parse_args() -> Result<CliArgs, String> {
@@ -122,22 +96,22 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .long_about(long_about)
-        .about("Aqua CLI Tool - Validates, Verifies, Signs, Witness aqua chain file and generates aqua chain files using aqua protocol")
+        .about("Aqua CLI — verify, sign, witness, and generate Aqua trees using the Aqua Protocol")
         .arg(
             Arg::new("authenticate")
                 .short('a')
                 .long("authenticate")
                 .action(ArgAction::Set)
-                .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
-                .help("Authenticate (verify) an aqua json file"),
+                .value_parser(clap::builder::ValueParser::new(resolve_aqua_file))
+                .help("Authenticate (verify) an Aqua tree file"),
         )
         .arg(
             Arg::new("sign")
                 .short('s')
                 .long("sign")
                 .action(ArgAction::Set)
-                .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
-                .help("Sign an aqua json file"),
+                .value_parser(clap::builder::ValueParser::new(resolve_aqua_file))
+                .help("Sign an Aqua tree file"),
         )
         .arg(
             Arg::new("sign-type")
@@ -151,8 +125,8 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .short('w')
                 .long("witness")
                 .action(ArgAction::Set)
-                .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
-                .help("Witness an aqua json file"),
+                .value_parser(clap::builder::ValueParser::new(resolve_aqua_file))
+                .help("Witness an Aqua tree file"),
         )
         .arg(
             Arg::new("witness-eth")
@@ -177,8 +151,8 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .short('d')
                 .long("delete")
                 .action(ArgAction::Set)
-                .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
-                .help("Delete/remove revision from an aqua json file, removes last revision"),
+                .value_parser(clap::builder::ValueParser::new(resolve_aqua_file))
+                .help("Delete/remove the last revision from an Aqua tree file"),
         )
         .arg(
             Arg::new("file")
@@ -216,9 +190,9 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .action(ArgAction::Set),
         )
         .arg(
-            Arg::new("keys_file")
+            Arg::new("keys-file")
                 .short('k')
-                .long("keys_file")
+                .long("keys-file")
                 .action(ArgAction::Set)
                 .value_parser(clap::builder::ValueParser::new(is_valid_json_file))
                 .help("Keys file json containing nonce, nostr_sk and did:key"),
@@ -389,7 +363,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .map(|o| PathBuf::from(o));
     let level = matches.get_one::<String>("level").cloned();
     let keys_file = matches
-        .get_one::<String>("keys_file")
+        .get_one::<String>("keys-file")
         .map(|p| PathBuf::from(p));
     let delete = matches
         .get_one::<String>("delete")
@@ -634,14 +608,14 @@ async fn main() {
             .await;
         }
         (_, _, _, _, _, Some(file_path), _, _) => {
-            println!("Generating aqua json file from: {:?}", file_path);
+            println!("Generating Aqua tree from: {:?}", file_path);
             cli_generate_aqua_chain(args.clone(), &aquafier).await;
         }
         (_, _, _, _, _, _, Some(link_paths), _) => {
             let parent = link_paths[0].clone();
             let children: Vec<PathBuf> = link_paths[1..].to_vec();
             println!(
-                "Linking {} child chain(s) into parent {:?}",
+                "Linking {} child tree(s) into parent {:?}",
                 children.len(),
                 parent
             );
