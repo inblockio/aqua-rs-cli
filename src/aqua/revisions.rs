@@ -32,7 +32,7 @@ pub fn cli_remove_revisions_from_aqua_chain(
         if args.output.is_some() {
             let logs = save_logs_to_file(&logs_data, args.output.unwrap());
             if logs.is_err() {
-                eprintln!("Error: saving logs {}", logs.unwrap());
+                eprintln!("Error: saving logs {}", logs.err().unwrap());
             }
         }
         return;
