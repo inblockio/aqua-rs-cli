@@ -213,7 +213,10 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
     }
 
     // ── Phase 4: Report ─────────────────────────────────────────────────
-    print_forest_report(&forest, &results, load_failed);
+    let all_failed = print_forest_report(&forest, &results, load_failed);
+    if all_failed && args.daemon.is_none() {
+        std::process::exit(1);
+    }
 
     if args.verbose {
         println!();
@@ -250,7 +253,8 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
 
 // ─── Report printing ─────────────────────────────────────────────────────────
 
-fn print_forest_report(forest: &Forest, results: &[(String, bool, String)], load_failed: usize) {
+/// Print forest summary. Returns `true` if all files failed (caller decides whether to exit).
+fn print_forest_report(forest: &Forest, results: &[(String, bool, String)], load_failed: usize) -> bool {
     println!("Per-file verification:");
     let mut pass_count = 0usize;
     let mut fail_count = 0usize;
@@ -311,11 +315,15 @@ fn print_forest_report(forest: &Forest, results: &[(String, bool, String)], load
     println!();
     if fail_count == 0 && load_failed == 0 && summary.node_count > 0 {
         println!("Forest built successfully.");
+        false
     } else if load_failed + fail_count > 0 && pass_count == 0 {
         eprintln!("All files failed to ingest.");
-        std::process::exit(1);
+        true
     } else if fail_count + load_failed > 0 {
         println!("Forest built with {} error(s).", fail_count + load_failed);
+        false
+    } else {
+        false
     }
 }
 
