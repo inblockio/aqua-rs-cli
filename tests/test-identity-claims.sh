@@ -19,7 +19,7 @@ test_expect_success 'Email claim with test bypass (test@inblock.io)' '
     rm -f email_claim.aqua.json &&
     $AQUA_CLI --create-object --template-name email \
         --payload "{\"email\":\"test@inblock.io\"}" \
-        --keys_file keys.json \
+        --keys-file keys.json \
         > email_output 2>&1 &&
     grep -q "Test mode: skipping Twilio verification" email_output
 '
@@ -37,7 +37,7 @@ test_expect_success 'Phone claim with test bypass (+10000000000)' '
     rm -f phone_claim.aqua.json &&
     $AQUA_CLI --create-object --template-name phone \
         --payload "{\"phone_number\":\"+10000000000\"}" \
-        --keys_file keys.json \
+        --keys-file keys.json \
         > phone_output 2>&1 &&
     grep -q "Test mode: skipping Twilio verification" phone_output
 '
@@ -59,7 +59,7 @@ test_expect_success 'Phone template with email value fails validation' '
     rm -f phone_claim.aqua.json &&
     ! $AQUA_CLI --create-object --template-name phone \
         --payload "{\"phone_number\":\"test@inblock.io\"}" \
-        --keys_file keys.json \
+        --keys-file keys.json \
         > phone_email_err 2>&1 ||
     grep -qi "does not match\|pattern\|error\|fail" phone_email_err
 '
@@ -68,7 +68,7 @@ test_expect_success 'Email template with phone number fails validation' '
     rm -f email_claim.aqua.json &&
     ! $AQUA_CLI --create-object --template-name email \
         --payload "{\"email\":\"+10000000000\"}" \
-        --keys_file keys.json \
+        --keys-file keys.json \
         > email_phone_err 2>&1 ||
     grep -qi "does not match\|pattern\|error\|fail" email_phone_err
 '
@@ -77,7 +77,7 @@ test_expect_success 'Phone template without + prefix fails validation' '
     rm -f phone_claim.aqua.json &&
     ! $AQUA_CLI --create-object --template-name phone \
         --payload "{\"phone_number\":\"10000000000\"}" \
-        --keys_file keys.json \
+        --keys-file keys.json \
         > phone_noplus_err 2>&1 ||
     grep -qi "does not match\|pattern\|error\|fail" phone_noplus_err
 '
