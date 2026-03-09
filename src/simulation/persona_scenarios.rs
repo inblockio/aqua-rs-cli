@@ -53,6 +53,8 @@ use std::sync::Arc;
 use aqua_rs_sdk::{
     primitives::{Method, MethodError, RevisionLink},
     schema::{
+        template::BuiltInTemplate,
+        templates,
         tree::Tree,
         AquaTreeWrapper, SigningCredentials,
     },
@@ -110,17 +112,13 @@ fn no_trust() -> Aquafier {
 // Claim tree helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Build a genesis claim tree from a raw template hash string and JSON payload.
+/// Build a genesis claim tree from a template hash constant and JSON payload.
 fn build_claim_raw(
     aq: &Aquafier,
-    template_hash: &str,
+    template_hash: [u8; 32],
     payload: serde_json::Value,
 ) -> Result<Tree, MethodError> {
-    let link: RevisionLink = template_hash
-        .parse()
-        .map_err(|e: <RevisionLink as std::str::FromStr>::Err| {
-            MethodError::Simple(format!("invalid template hash: {}", e))
-        })?;
+    let link = RevisionLink::from_bytes(template_hash);
     aq.create_object(link, None, payload, Some(Method::Scalar))
 }
 
@@ -284,7 +282,7 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
         let aq = trust_one(&org_did);
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x44416d64213f54cd25c0d0cb72e2a58a358dab83ee584a74c6a89f33e454aae8", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::GitHubClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": alice_did,
                 "provider": "github",
                 "provider_id": "8821034",
@@ -335,7 +333,7 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
         let aq = no_trust();
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x6489c5a615615128cc0da08e175b6faaaafe64f9692f67cc7c04849451964cfa", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::EmailClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": alice_did,
                 "email": "alice@devmail.com",
                 "display_name": "Alice Chen"
@@ -378,7 +376,7 @@ pub async fn persona_alice() -> Vec<PersonaResult> {
         let aq = no_trust();
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0xb8aeaca00ee15ddf6037f3ea9b4138edbd517fbf905e40b56cf7a9810fc87706", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::NameClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": alice_did,
                 "given_name": "Alice",
                 "family_name": "Chen",
@@ -446,7 +444,7 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
         let aq = trust_one(&org_did);
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x7d4f2b845f33c819dfdfbc86c0d3304e3f1a387a34742d495b23864308df11fd", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::GoogleClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": bob_did,
                 "provider": "google",
                 "provider_id": "109283471823456789",
@@ -495,9 +493,9 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
         let aq = trust_one(&org_did);
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0xe0efe33df32f17069d726ced96435f1682d9fa4a006bbecafa738b198578f58f", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::PhoneClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": bob_did,
-                "phone_number": "+34 612 345 678",
+                "phone_number": "+34612345678",
                 "display_name": "Bob Martinez",
                 "valid_until": 1000
             }))?;
@@ -543,7 +541,7 @@ pub async fn persona_bob() -> Vec<PersonaResult> {
         let aq = trust_one(&org_did);
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x156f536a7b3d92c264eaf87a73c5b013238c843afe3fd48f334be5747b9f944b", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::AddressClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": bob_did,
                 "street_address": "Calle Gran Vía 42, 3B",
                 "locality": "Madrid",
@@ -617,7 +615,7 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
         let aq = trust_one(&org_did);
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x5f2a0876d5192fd3089d2f9bbfeecc1f0c12792deafc1664ecd52cee5db75826", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::DnsClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": claire_did,
                 "domain_name": "claire-dubois.press",
                 "proof_url": "https://claire-dubois.press/.well-known/aqua-proof.txt"
@@ -664,7 +662,7 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
         let aq = no_trust();
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x430053037e3e969a3e67056b991b61a46ff449aa7f6df9aea5310230bfd6f975", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::PassportClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": claire_did,
                 "document_type": "passport",
                 "document_number": "09FG228174",
@@ -714,7 +712,7 @@ pub async fn persona_claire() -> Vec<PersonaResult> {
         let aq = trust_one(&org_did);
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0xfa0fe47cd9eaaae0d244d81548cc6a7816d7ca1be61861fb5d357d53f7a9dc72", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::BirthdateClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": claire_did,
                 "birth_year": 1985,
                 "birth_month": 3,
@@ -789,7 +787,7 @@ pub async fn persona_david() -> Vec<PersonaResult> {
         let aq = trust_one(&org_did);
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x4ee2f1792d3aa3abb322c16acf73e6617b201c1351a109b623716cad351ea57a", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::AgeClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": david_did,
                 "age_over_18": true,
                 "age_over_21": false,
@@ -838,7 +836,7 @@ pub async fn persona_david() -> Vec<PersonaResult> {
         let aq = no_trust();
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0x1abae19875ca2f3cee4b3fe65de6a93d62d9d60070339798dd87ff7effc1ae3e", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::DriversLicenseClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": david_did,
                 "document_type": "drivers_license",
                 "document_number": "KR-DL-20190834",
@@ -893,7 +891,7 @@ pub async fn persona_david() -> Vec<PersonaResult> {
         let aq = no_trust();
 
         let result = match async {
-            let tree = build_claim_raw(&aq, "0xa1eb7b1408027d6f9a7262ef2413374df4d0574117ec656826a4ac936b9448e2", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::NationalIdClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": david_did,
                 "document_type": "national_id",
                 "document_number": "KR-NID-900210-1234567",
@@ -968,7 +966,7 @@ pub async fn persona_eve() -> Vec<PersonaResult> {
         let aq = no_trust();
 
         let build_result = async {
-            let tree = build_claim_raw(&aq, "0x7cf1c62d746ba3788d9bf9f52f8dad8a1d514d2af3ab4c8b4024363f0f8c2c95", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::PlatformIdentityClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": eve_did,
                 "provider": "linkedin",
                 "provider_id": "eve-okafor-7b8a2",
@@ -1030,7 +1028,7 @@ pub async fn persona_eve() -> Vec<PersonaResult> {
 
         let result = match async {
             // Build but do NOT sign — exercising the `unsigned` state
-            let tree = build_claim_raw(&aq, "0x00464537648c598b564a4a9670b0ed4000db5dc532af750680a77883352bd3d0", serde_json::json!({
+            let tree = build_claim_raw(&aq, templates::DocumentClaim::TEMPLATE_LINK, serde_json::json!({
                 "signer_did": eve_did,
                 "document_type": "certificate",
                 "document_number": "RC-NGR-2024-0183847",
