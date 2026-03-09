@@ -129,9 +129,15 @@ test_expect_success 'inspect a genesis node returns type and hash' '
 
 test_expect_success 'branches of genesis returns children' '
     SOCKET=$(cat daemon_socket) &&
-    GENESIS=$(daemon_cmd "$SOCKET" "geneses" | grep "0x" | head -1 | tr -d " ") &&
-    daemon_cmd "$SOCKET" "branches $GENESIS" > branches_out &&
-    grep -q "type=" branches_out
+    FOUND="" &&
+    for G in $(daemon_cmd "$SOCKET" "geneses" | grep -o "0x[0-9a-f]*"); do
+        G=$(echo "$G" | tr -d "[:space:]") &&
+        daemon_cmd "$SOCKET" "branches $G" > branches_out &&
+        if grep -q "type=" branches_out; then
+            FOUND=yes && break
+        fi
+    done &&
+    test "$FOUND" = "yes"
 '
 
 test_expect_success 'tree command renders subtree' '
@@ -261,13 +267,21 @@ test_expect_success 'Re-add a tree so we have nodes to work with' '
 
 test_expect_success 'Evict a non-genesis node fails with error' '
     SOCKET=$(cat daemon_socket) &&
-    TIP=$(daemon_cmd "$SOCKET" "tips" | grep "0x" | head -1 | tr -d " ") &&
-    GENESIS=$(daemon_cmd "$SOCKET" "geneses" | grep "0x" | head -1 | tr -d " ") &&
-    # Only try if tip != genesis (which it should be for a signed tree)
-    if [ "$TIP" != "$GENESIS" ]; then
-        daemon_cmd "$SOCKET" "evict $TIP" > evict_nogenesis_out &&
+    # Collect all genesis hashes into a file for comparison
+    daemon_cmd "$SOCKET" "geneses" | grep -o "0x[0-9a-fA-F]*" | tr -d "[:space:]" | sort > all_geneses &&
+    # Find a tip that is NOT a genesis (i.e. a signature or content node)
+    NON_GENESIS="" &&
+    for T in $(daemon_cmd "$SOCKET" "tips" | grep -o "0x[0-9a-fA-F]*"); do
+        T=$(echo "$T" | tr -d "[:space:]") &&
+        if ! grep -qF "$T" all_geneses; then
+            NON_GENESIS="$T" && break
+        fi
+    done &&
+    if [ -n "$NON_GENESIS" ]; then
+        daemon_cmd "$SOCKET" "evict $NON_GENESIS" > evict_nogenesis_out &&
         grep -qi "not a genesis" evict_nogenesis_out
     else
+        # All tips are geneses (single-node trees only) — skip gracefully
         true
     fi
 '
@@ -276,7 +290,7 @@ test_expect_success 'Evict a non-genesis node fails with error' '
 
 test_expect_success 'Inspect with hash prefix (first 10 chars) works' '
     SOCKET=$(cat daemon_socket) &&
-    GENESIS=$(daemon_cmd "$SOCKET" "geneses" | grep -o "0x[0-9a-f]*" | head -1) &&
+    GENESIS=$(daemon_cmd "$SOCKET" "geneses" | grep -oi "0x[0-9a-fA-F]*" | head -1 | tr -d "[:space:]") &&
     # Use first 10 hex chars (0x + 8 chars)
     PREFIX=$(echo "$GENESIS" | cut -c1-10) &&
     daemon_cmd "$SOCKET" "inspect $PREFIX" > inspect_prefix_out &&

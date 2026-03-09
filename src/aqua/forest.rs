@@ -527,12 +527,17 @@ fn resolve_hash_prefix(state: &DaemonState, input: &str) -> Result<RevisionLink,
         return Err("Missing hash argument.".to_string());
     }
 
-    // Try exact parse first
+    // Try exact parse first (only treat as exact match for full-length hashes)
     if let Ok(link) = input.parse::<RevisionLink>() {
         if state.forest.get_node(&link).is_some() {
             return Ok(link);
         }
-        return Err(format!("Node not found: {}", input));
+        // Full-length hash (0x + 64 hex chars) that wasn't found → definitive miss
+        let hex_part = input.strip_prefix("0x").unwrap_or(input);
+        if hex_part.len() >= 64 {
+            return Err(format!("Node not found: {}", input));
+        }
+        // Short hex that parsed as valid but isn't in forest → fall through to prefix matching
     }
 
     // Prefix matching: must start with 0x and have at least 8 hex chars
