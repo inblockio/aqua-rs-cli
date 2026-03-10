@@ -326,7 +326,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .group(
             ArgGroup::new("operation")
                 .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas", "connect"])
-                .required(true),
+                .required(false),
         )
         .get_matches();
 
