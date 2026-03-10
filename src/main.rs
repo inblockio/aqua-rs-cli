@@ -51,7 +51,8 @@ MODIFIERS:
     --trust <DID> <LEVEL>       Populate trust store for forest verification (1=marginal, 2=full, 3=ultimate)
     --daemon [SECONDS]          Keep forest alive as persistent daemon (default: 600s idle timeout)
     --target <ID>               Push operation results into a running daemon's forest
-    --listen <PORT>         Start HTTP API on PORT for state viewer integration (requires --daemon)
+    --listen <PORT>         Override daemon HTTP API port (default: 8800, requires --daemon)
+    --no-listen             Disable the HTTP API in daemon mode (Unix socket only)
 
     The .aqua.json extension is auto-detected: `aqua-cli -a README.md` will find README.md.aqua.json.
 
@@ -80,9 +81,13 @@ EXAMPLES:
     # Ephemeral forest with cross-tree resolution:
     aqua-cli --forest dir/*.aqua.json -v
 
-    # Persistent forest daemon:
+    # Persistent forest daemon (HTTP API on port 8800 by default):
     aqua-cli --forest dir/*.aqua.json --daemon
+    aqua-cli --forest dir/*.aqua.json --daemon --listen 9000   # custom port
+    aqua-cli --forest dir/*.aqua.json --daemon --no-listen      # socket only
     aqua-cli --connect 12345
+    aqua-cli --cleanup          # remove orphaned sockets
+    aqua-cli --cleanup all      # kill all daemons + remove sockets
 
 For more information, visit: https://github.com/inblockio/aqua-cli-rs
 "#;
@@ -313,7 +318,15 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .action(ArgAction::Set)
                 .value_parser(clap::value_parser!(u16))
                 .requires("daemon")
-                .help("Start an HTTP API on the given port alongside the daemon (requires --daemon)"),
+                .help("Override the default HTTP API port (default: 8800, requires --daemon)"),
+        )
+        .arg(
+            Arg::new("no-listen")
+                .long("no-listen")
+                .action(ArgAction::SetTrue)
+                .requires("daemon")
+                .conflicts_with("listen")
+                .help("Disable the HTTP API in daemon mode (Unix socket only)"),
         )
         .arg(
             Arg::new("connect")
@@ -405,7 +418,16 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let simulate_personas = matches.get_flag("simulate-personas");
     let keep = matches.get_flag("keep");
     let daemon = matches.get_one::<u64>("daemon").copied();
-    let listen = matches.get_one::<u16>("listen").copied();
+    let no_listen = matches.get_flag("no-listen");
+    let listen = if no_listen {
+        None
+    } else if let Some(port) = matches.get_one::<u16>("listen").copied() {
+        Some(port)
+    } else if daemon.is_some() {
+        Some(8800) // default HTTP API port in daemon mode
+    } else {
+        None
+    };
     let connect = matches.get_one::<u64>("connect").copied();
     let target = matches.get_one::<u64>("target").copied();
     let cleanup = matches.get_one::<String>("cleanup").cloned();

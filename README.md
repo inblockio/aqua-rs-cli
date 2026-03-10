@@ -45,6 +45,13 @@ Notes : if a keys file is speciefied in the commands it will take precendence ov
 | `--template-hash` | Custom template hash (`0x`-prefixed) for `--create-object` |
 | `--payload` | JSON payload: a file path or inline JSON string for `--create-object` |
 | `--list-templates` | List all available built-in templates with their hashes |
+| `--forest <FILES...>` | Ingest `.aqua.json` files into an ephemeral in-memory forest |
+| `--daemon [SECONDS]` | Keep forest alive as persistent daemon (default: 600s idle timeout). Starts HTTP API on port 8800 by default |
+| `--listen <PORT>` | Override daemon HTTP API port (default: 8800, requires `--daemon`) |
+| `--no-listen` | Disable the HTTP API in daemon mode (Unix socket only) |
+| `--connect <ID>` | Connect to a running forest daemon's REPL by its PID |
+| `--target <ID>` | Push operation results into a running daemon's forest by its PID |
+| `--trust <DID> <LEVEL>` | Populate trust store (1=marginal, 2=full, 3=ultimate). Used with `--forest` |
 | `--cleanup [all]` | Remove orphaned daemon sockets; with `all`, also kill live daemons |
 
 ### `--previous-hash` option
