@@ -38,6 +38,7 @@ COMMANDS:
     --list-templates            List all available built-in templates with their hashes
     --forest <FILES...>         Ingest .aqua.json files into an ephemeral in-memory forest
     --connect <ID>              Connect to a running forest daemon via Unix socket
+    --cleanup [all]              Remove orphaned daemon sockets; with 'all', also kill live daemons
     -i, --info                  Show detailed CLI information
 
 MODIFIERS:
@@ -322,6 +323,15 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .help("Connect to a running forest daemon's REPL by its ID (PID)"),
         )
         .arg(
+            Arg::new("cleanup")
+                .long("cleanup")
+                .action(ArgAction::Set)
+                .num_args(0..=1)
+                .default_missing_value("")
+                .value_parser(["", "all"])
+                .help("Remove orphaned daemon sockets from /tmp; with 'all', also kill live daemons and remove their sockets"),
+        )
+        .arg(
             Arg::new("target")
                 .long("target")
                 .action(ArgAction::Set)
@@ -334,7 +344,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas", "connect"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas", "connect", "cleanup"])
                 .required(false),
         )
         .get_matches();
@@ -398,6 +408,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let listen = matches.get_one::<u16>("listen").copied();
     let connect = matches.get_one::<u64>("connect").copied();
     let target = matches.get_one::<u64>("target").copied();
+    let cleanup = matches.get_one::<String>("cleanup").cloned();
     let trust = matches.get_many::<String>("trust").map(|mut vals| {
         let did = vals.next().unwrap().clone();
         let level_str = vals.next().unwrap();
@@ -440,7 +451,96 @@ pub fn parse_args() -> Result<CliArgs, String> {
         connect,
         target,
         listen,
+        cleanup,
     })
+}
+
+/// Remove orphaned daemon socket files from /tmp.
+///
+/// Scans for `/tmp/aqua-forest-{PID}.sock` files and removes any whose
+/// owning PID no longer corresponds to a running process.
+/// When `kill_all` is true, also sends SIGTERM to live daemons and removes
+/// their sockets.
+fn cli_cleanup_sockets(kill_all: bool) {
+    use nix::sys::signal::{kill, Signal};
+    use nix::unistd::Pid;
+
+    let tmp = std::path::Path::new("/tmp");
+    let mut found = 0u32;
+    let mut removed = 0u32;
+    let mut killed = 0u32;
+
+    let entries = match std::fs::read_dir(tmp) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("Failed to read /tmp: {}", e);
+            return;
+        }
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Match aqua-forest-{PID}.sock
+        if let Some(rest) = name_str.strip_prefix("aqua-forest-") {
+            if let Some(pid_str) = rest.strip_suffix(".sock") {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    found += 1;
+                    let proc_path = format!("/proc/{}", pid);
+                    let alive = std::path::Path::new(&proc_path).exists();
+
+                    if !alive {
+                        // Orphaned — remove socket
+                        match std::fs::remove_file(entry.path()) {
+                            Ok(_) => {
+                                println!("  REMOVED  {} (pid {} not running)", name_str, pid);
+                                removed += 1;
+                            }
+                            Err(e) => {
+                                eprintln!("  FAILED   {} — {}", name_str, e);
+                            }
+                        }
+                    } else if kill_all {
+                        // Alive and --cleanup all — kill then remove socket
+                        let nix_pid = Pid::from_raw(pid as i32);
+                        match kill(nix_pid, Signal::SIGTERM) {
+                            Ok(_) => {
+                                println!("  KILLED   {} (sent SIGTERM to pid {})", name_str, pid);
+                                killed += 1;
+                                // Give the daemon a moment to clean up its own socket
+                                std::thread::sleep(std::time::Duration::from_millis(200));
+                                // Remove socket if the daemon didn't clean it up
+                                if entry.path().exists() {
+                                    let _ = std::fs::remove_file(entry.path());
+                                }
+                                removed += 1;
+                            }
+                            Err(e) => {
+                                eprintln!("  FAILED   {} — kill pid {}: {}", name_str, pid, e);
+                            }
+                        }
+                    } else {
+                        println!("  ALIVE    {} (pid {})", name_str, pid);
+                    }
+                }
+            }
+        }
+    }
+
+    if found == 0 {
+        println!("No daemon sockets found in /tmp.");
+    } else {
+        let mut summary = format!("{} socket(s) found", found);
+        if removed > 0 {
+            summary.push_str(&format!(", {} removed", removed));
+        }
+        if killed > 0 {
+            summary.push_str(&format!(", {} daemon(s) killed", killed));
+        }
+        summary.push('.');
+        println!("\n{}", summary);
+    }
 }
 
 /// Search from CWD upward for the directory containing .env (mirrors dotenv's behavior)
@@ -510,6 +610,11 @@ async fn main() {
         return;
     }
 
+    if let Some(ref mode) = args.cleanup {
+        cli_cleanup_sockets(mode == "all");
+        return;
+    }
+
     if args.authenticate.is_none()
         && args.sign.is_none()
         && args.witness.is_none()
@@ -520,6 +625,7 @@ async fn main() {
         && args.forest_files.is_none()
         && !args.simulate
         && !args.simulate_personas
+        && args.cleanup.is_none()
     {
         println!("{}", BASE_LONG_ABOUT);
         return;

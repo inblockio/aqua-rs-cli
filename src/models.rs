@@ -49,4 +49,5 @@ pub struct CliArgs {
     pub connect: Option<u64>,
     pub target: Option<u64>,
     pub listen: Option<u16>,
+    pub cleanup: Option<String>,
 }

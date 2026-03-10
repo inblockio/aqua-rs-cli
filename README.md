@@ -45,6 +45,7 @@ Notes : if a keys file is speciefied in the commands it will take precendence ov
 | `--template-hash` | Custom template hash (`0x`-prefixed) for `--create-object` |
 | `--payload` | JSON payload: a file path or inline JSON string for `--create-object` |
 | `--list-templates` | List all available built-in templates with their hashes |
+| `--cleanup [all]` | Remove orphaned daemon sockets; with `all`, also kill live daemons |
 
 ### `--previous-hash` option
 
@@ -107,6 +108,18 @@ Prints all 15 built-in template names, their corresponding hashes, and the requi
 
 ```bash
 aqua-cli --list-templates
+```
+
+### `--cleanup` option
+
+Scans `/tmp` for `aqua-forest-{PID}.sock` files left behind by daemon processes. Orphaned sockets (whose owning process is no longer running) are removed automatically. With the `all` argument, live daemons are also terminated (via `SIGTERM`) and their sockets removed.
+
+```bash
+# Remove only orphaned sockets (live daemons are left untouched)
+aqua-cli --cleanup
+
+# Kill all running daemons and remove all sockets
+aqua-cli --cleanup all
 ```
 
 ## Local use
