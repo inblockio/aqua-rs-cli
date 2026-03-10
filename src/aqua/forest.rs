@@ -906,8 +906,16 @@ fn cmd_evict(state: &mut DaemonState, arg: &str) -> String {
                     hash
                 );
             }
+            // Collect all hashes in the subtree before eviction.
+            let mut subtree = Vec::new();
+            collect_subtree_hashes(&state.forest, &hash, &mut subtree);
             state.forest.evict_node(&hash);
-            format!("Evicted genesis {} and its subtree.", hash)
+            // Remove evicted hashes from rev_to_tree so /trees reflects reality.
+            for h in &subtree {
+                state.rev_to_tree.remove(&h.to_string());
+            }
+            state.rev_to_tree.remove(&hash.to_string());
+            format!("Evicted genesis {} and its subtree ({} nodes).", hash, subtree.len() + 1)
         }
         Err(e) => e,
     }
@@ -917,6 +925,7 @@ fn cmd_remove(state: &mut DaemonState, arg: &str) -> String {
     match resolve_hash_prefix(state, arg) {
         Ok(hash) => {
             if state.forest.remove_node(&hash) {
+                state.rev_to_tree.remove(&hash.to_string());
                 format!("Removed node {}.", hash)
             } else {
                 format!("Failed to remove node {} (not found or is genesis root).", hash)
