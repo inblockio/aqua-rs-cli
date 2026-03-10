@@ -48,4 +48,5 @@ pub struct CliArgs {
     pub daemon: Option<u64>,
     pub connect: Option<u64>,
     pub target: Option<u64>,
+    pub listen: Option<u16>,
 }

@@ -50,6 +50,7 @@ MODIFIERS:
     --trust <DID> <LEVEL>       Populate trust store for forest verification (1=marginal, 2=full, 3=ultimate)
     --daemon [SECONDS]          Keep forest alive as persistent daemon (default: 600s idle timeout)
     --target <ID>               Push operation results into a running daemon's forest
+    --listen <PORT>         Start HTTP API on PORT for state viewer integration (requires --daemon)
 
     The .aqua.json extension is auto-detected: `aqua-cli -a README.md` will find README.md.aqua.json.
 
@@ -306,6 +307,14 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .help("Keep the forest alive as a persistent daemon with idle timeout in seconds (default: 600)"),
         )
         .arg(
+            Arg::new("listen")
+                .long("listen")
+                .action(ArgAction::Set)
+                .value_parser(clap::value_parser!(u16))
+                .requires("daemon")
+                .help("Start an HTTP API on the given port alongside the daemon (requires --daemon)"),
+        )
+        .arg(
             Arg::new("connect")
                 .long("connect")
                 .action(ArgAction::Set)
@@ -386,6 +395,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let simulate_personas = matches.get_flag("simulate-personas");
     let keep = matches.get_flag("keep");
     let daemon = matches.get_one::<u64>("daemon").copied();
+    let listen = matches.get_one::<u16>("listen").copied();
     let connect = matches.get_one::<u64>("connect").copied();
     let target = matches.get_one::<u64>("target").copied();
     let trust = matches.get_many::<String>("trust").map(|mut vals| {
@@ -429,6 +439,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         daemon,
         connect,
         target,
+        listen,
     })
 }
 

@@ -27,9 +27,20 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
 
+use axum::{
+    extract::{Path as AxumPath, State as AxumState},
+    http::StatusCode,
+    response::Json as AxumJson,
+    routing::get,
+    Router,
+};
+use tower_http::cors::{Any, CorsLayer};
+
 use crate::models::CliArgs;
 
 extern crate serde_json_path_to_error as serde_json;
+
+type SharedState = Arc<Mutex<DaemonState>>;
 
 // ─── Daemon state ────────────────────────────────────────────────────────────
 
@@ -247,7 +258,7 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
             id,
             verbose: args.verbose,
         };
-        run_daemon(state).await;
+        run_daemon(state, args.listen).await;
     }
 }
 
@@ -329,7 +340,7 @@ fn print_forest_report(forest: &Forest, results: &[(String, bool, String)], load
 
 // ─── Daemon event loop ───────────────────────────────────────────────────────
 
-async fn run_daemon(state: DaemonState) {
+async fn run_daemon(state: DaemonState, listen_port: Option<u16>) {
     let id = state.id;
     let timeout_secs = state.idle_timeout.as_secs();
     let socket_path = format!("/tmp/aqua-forest-{}.sock", id);
@@ -353,6 +364,28 @@ async fn run_daemon(state: DaemonState) {
     println!("Socket: {}", socket_path);
 
     let shared = Arc::new(Mutex::new(state));
+
+    let http_handle: Option<tokio::task::JoinHandle<()>> = if let Some(port) = listen_port {
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+        let app = Router::new()
+            .route("/health", get(api_health))
+            .route("/trees", get(api_trees))
+            .route("/trees/{hash}", get(api_tree_by_hash))
+            .layer(cors)
+            .with_state(shared.clone());
+        println!("HTTP API listening on http://127.0.0.1:{}", port);
+        Some(tokio::spawn(async move {
+            let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from(([127, 0, 0, 1], port)))
+                .await
+                .expect("Failed to bind HTTP listener");
+            axum::serve(listener, app).await.expect("HTTP server failed");
+        }))
+    } else {
+        None
+    };
 
     // Stdin reader task
     let shared_stdin = shared.clone();
@@ -446,6 +479,9 @@ async fn run_daemon(state: DaemonState) {
 
     // Cleanup
     socket_task.abort();
+    if let Some(h) = http_handle {
+        h.abort();
+    }
     let _ = std::fs::remove_file(&socket_path_cleanup);
     println!("Socket removed. Daemon stopped.");
 }
@@ -928,6 +964,43 @@ async fn cmd_ingest(state: &mut DaemonState, arg: &str) -> String {
     }
 
     status
+}
+
+// ─── HTTP API handlers ───────────────────────────────────────────────────────
+
+async fn api_health() -> AxumJson<serde_json::Value> {
+    AxumJson(serde_json::json!({"status": "ok"}))
+}
+
+async fn api_trees(AxumState(state): AxumState<SharedState>) -> AxumJson<Vec<String>> {
+    let mut st = state.lock().await;
+    st.touch();
+    // Only return tips whose revision hash exists in rev_to_tree (user-ingested
+    // trees). Template trees inserted by the SDK are excluded — the state viewer
+    // resolves those via its own built-in template cache.
+    let tips: Vec<String> = st
+        .forest
+        .tips()
+        .iter()
+        .map(|t| t.to_string())
+        .filter(|h| st.rev_to_tree.contains_key(h))
+        .collect();
+    AxumJson(tips)
+}
+
+async fn api_tree_by_hash(
+    AxumState(state): AxumState<SharedState>,
+    AxumPath(hash): AxumPath<String>,
+) -> Result<AxumJson<serde_json::Value>, StatusCode> {
+    let mut st = state.lock().await;
+    st.touch();
+    // Look up by exact hash in the revision-to-tree index.
+    // Every revision hash in every ingested tree is a valid key.
+    if let Some((_name, tree)) = st.rev_to_tree.get(&hash) {
+        Ok(AxumJson(serde_json::json!(tree)))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
