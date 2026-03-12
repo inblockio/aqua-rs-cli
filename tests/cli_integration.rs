@@ -1345,12 +1345,17 @@ fn full_workflow_generate_link_sign() {
 // ═════════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn no_operation_exits_with_error() {
+fn no_operation_shows_help_and_exits_ok() {
     let output = cli().output().unwrap();
-    // clap exits non-zero when the required arg group is missing
+    // When no args are provided, the CLI shows BASE_LONG_ABOUT and exits 0
     assert!(
-        !output.status.success(),
-        "no args should exit with error code"
+        output.status.success(),
+        "no args should show help and exit successfully"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Aqua CLI"),
+        "output should contain the help text"
     );
 }
 
