@@ -50,6 +50,8 @@ struct DaemonState {
     aquafier: Aquafier,
     /// Reverse index: revision_hash → (filename, Tree) for link resolution
     rev_to_tree: HashMap<String, (String, Tree)>,
+    /// Hashes removed via `remove` command — drained by `GET /removed`.
+    removed_hashes: Vec<String>,
     last_accessed: Instant,
     idle_timeout: Duration,
     id: u64,
@@ -253,6 +255,7 @@ pub async fn cli_ephemeral_forest(args: CliArgs, aquafier: &Aquafier, files: Vec
             forest,
             aquafier,
             rev_to_tree,
+            removed_hashes: Vec::new(),
             last_accessed: Instant::now(),
             idle_timeout: Duration::from_secs(timeout_secs),
             id,
@@ -374,6 +377,7 @@ async fn run_daemon(state: DaemonState, listen_port: Option<u16>) {
             .route("/health", get(api_health))
             .route("/trees", get(api_trees))
             .route("/trees/{hash}", get(api_tree_by_hash))
+            .route("/removed", get(api_removed))
             .layer(cors)
             .with_state(shared.clone());
         println!("HTTP API listening on http://127.0.0.1:{}", port);
@@ -864,6 +868,16 @@ async fn cmd_add(state: &mut DaemonState, arg: &str) -> String {
             }
         };
 
+        // Evict any nodes from the forest that already exist from a previous
+        // add of this file (or were promoted to genesis after a remove).
+        // This ensures a clean re-insert without stale Arc refs in genesis_map.
+        for rev_hash in tree.revisions.keys() {
+            if state.forest.get_node(rev_hash).is_some() {
+                state.forest.remove_node(rev_hash);
+                state.removed_hashes.push(rev_hash.to_string());
+            }
+        }
+
         // Add to rev_to_tree index
         for rev_hash in tree.revisions.keys() {
             state
@@ -925,7 +939,34 @@ fn cmd_remove(state: &mut DaemonState, arg: &str) -> String {
     match resolve_hash_prefix(state, arg) {
         Ok(hash) => {
             if state.forest.remove_node(&hash) {
-                state.rev_to_tree.remove(&hash.to_string());
+                let hash_str = hash.to_string();
+
+                // Track removal so the state viewer can pick it up via GET /removed.
+                state.removed_hashes.push(hash_str.clone());
+
+                // Find which source file this revision belonged to, so we can
+                // strip it from all sibling entries that share the same Tree.
+                let source_name = state
+                    .rev_to_tree
+                    .get(&hash_str)
+                    .map(|(name, _)| name.clone());
+
+                // Remove the hash's own entry.
+                state.rev_to_tree.remove(&hash_str);
+
+                // Strip the removed revision from every remaining Tree clone
+                // that came from the same source file, so the HTTP API and
+                // state viewer no longer return the deleted node.
+                if let Some(name) = source_name {
+                    let hash_link: RevisionLink = hash.clone();
+                    for (_k, (entry_name, tree)) in state.rev_to_tree.iter_mut() {
+                        if *entry_name == name {
+                            tree.revisions.remove(&hash_link);
+                            tree.file_index.remove(&hash_link);
+                        }
+                    }
+                }
+
                 format!("Removed node {}.", hash)
             } else {
                 format!("Failed to remove node {} (not found or is genesis root).", hash)
@@ -1010,6 +1051,15 @@ async fn api_tree_by_hash(
     } else {
         Err(StatusCode::NOT_FOUND)
     }
+}
+
+/// Return and drain the list of hashes removed since the last call.
+/// Polled by the state viewer to detect node removals.
+async fn api_removed(AxumState(state): AxumState<SharedState>) -> AxumJson<Vec<String>> {
+    let mut st = state.lock().await;
+    st.touch();
+    let removed = std::mem::take(&mut st.removed_hashes);
+    AxumJson(removed)
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
