@@ -163,8 +163,33 @@ let (result, _) = aquafier
 
 ---
 
+## Signing with secp256k1 / EIP-191
+
+In addition to Ed25519 (`SigningCredentials::Did`) and P-256 (`SigningCredentials::P256`),
+the SDK supports secp256k1/EIP-191 signing via `SigningCredentials::Secp256k1`:
+
+```rust
+// Key generation (simulation)
+use aqua_rs_sdk::Secp256k1Signer;
+let mut priv_bytes = [0u8; 32];
+OsRng.fill_bytes(&mut priv_bytes);
+let signer = Secp256k1Signer::new(priv_bytes.to_vec());
+let (did, _addr) = signer.derive_did_pkh().unwrap();
+// did = "did:pkh:eip155:1:0x<checksum_address>"
+
+// Signing
+let creds = SigningCredentials::Secp256k1 { secp256k1_key: priv_bytes.to_vec() };
+let op = aquafier.sign_aqua_tree(wrapper, &creds, None, None).await?;
+```
+
+The simulation helper `builders::sign_secp256k1()` and `keygen::generate_secp256k1()`
+wrap this for convenient use. SIM-2 uses secp256k1 for Amara (S1) and Priya (S5).
+
+---
+
 ## Reference
 
 - Simulation source: `src/simulation/builders.rs`, `src/simulation/scenarios.rs`
+- SIM-2 source: `src/simulation/sim2/personas.rs`, `src/simulation/sim2/error_scenarios.rs`
 - SDK skill: `../aqua-rs-sdk/skills/identity-layer.md`
 - Normative spec: `../aqua-rs-sdk/spec-identity.md` §3–§4

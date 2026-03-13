@@ -167,12 +167,28 @@ Line-based text:
 | `add <file> [file...]` | verify + `insert_node` | Ingest new .aqua.json files |
 | `evict <genesis_hash>` | `evict_node(hash)` | Remove genesis + cascade entire subtree |
 | `remove <hash>` | `remove_node(hash)` | Surgical remove single node (no cascade) |
+| `invalidate <name>` | `remove_node` per sig | Remove all signature nodes from a named tree (substring match on file name) |
 
 **Session commands:** `help`, `quit` / `exit`
 
 **Hash prefix matching:** All `<hash>` arguments accept prefix matching
 (minimum 8 hex chars after `0x`). Ambiguous prefixes return an error
 listing all matches.
+
+### `invalidate` command
+
+The `invalidate` command is designed for the SIM-2 state-viewer demo. It:
+1. Matches the argument (e.g. `amara-attestation`) against ingested file names (substring, case-insensitive, hyphens normalized to underscores)
+2. Finds all Signature-type nodes in the matching tree within the forest
+3. Removes them via `remove_node`, tracking removals in `removed_hashes`
+4. The state-viewer polls `GET /removed` and detects the state change (e.g. `attested → unsigned`)
+
+```
+forest> invalidate amara-attestation
+Invalidating 'amara-attestation' — removing 1 signature node(s) from: amara_attestation.aqua.json
+  Removed: 0xc4e1d84f808e3221…
+State-viewer will detect removal via GET /removed.
+```
 
 **Hidden `ingest` command:** Used by `--target` to push a serialized
 Tree JSON into the forest. Not intended for interactive use.
@@ -238,11 +254,25 @@ cargo run --bin aqua-cli -- -a newfile.aqua.json --target <PID>
 cargo run --bin aqua-cli -- -a /tmp/aqua-sim-XXXXXX/A4_attestation.aqua.json
 ```
 
+### SIM-2 State-Viewer Demo
+
+```bash
+# 1. Generate SIM-2 dataset (29 scenarios, all 17 WASM states)
+cargo run --bin aqua-cli --features simulation -- --simulate-2 --keep
+
+# 2. Load into daemon with state-viewer HTTP API
+cargo run --bin aqua-cli -- --forest /tmp/aqua-sim-*/*.aqua.json --daemon
+
+# 3. Demonstrate real-time invalidation (removes signature → state change)
+forest> invalidate amara-attestation
+# State-viewer polls GET /removed → detects attested → unsigned transition
+```
+
 ---
 
 ## Source Files
 
-- `src/aqua/forest.rs` — `cli_ephemeral_forest()`, 4-phase algorithm, `DaemonState`, `run_daemon()`, `execute_command()`, `handle_socket_client()`
+- `src/aqua/forest.rs` — `cli_ephemeral_forest()`, 4-phase algorithm, `DaemonState`, `run_daemon()`, `execute_command()`, `handle_socket_client()`, `cmd_invalidate()`
 - `src/aqua/connect.rs` — `cli_connect_forest()`, client REPL for `--connect`
 - `src/aqua/target.rs` — `push_tree_to_daemon()`, helper for `--target`
 - `src/aqua/verify.rs` — `cli_verify_chain()`, directory-scan resolution, `--target` push

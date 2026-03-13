@@ -12,6 +12,9 @@ cargo build
 cargo build --features simulation     # include --simulate suite
 cargo run --bin aqua-cli -- --help
 cargo run --bin aqua-cli --features simulation -- --simulate -v
+cargo run --bin aqua-cli --features simulation -- --simulate-personas -v
+cargo run --bin aqua-cli --features simulation -- --simulate-2 -v    # 29-scenario comprehensive suite
+cargo run --bin aqua-cli --features simulation -- --simulate-2 --keep # persist .aqua.json to /tmp
 cargo run --bin aqua-cli -- --forest *.aqua.json                     # ephemeral forest
 cargo run --bin aqua-cli -- --forest *.aqua.json --trust <DID> 2     # with trust store
 cargo run --bin aqua-cli -- --forest *.aqua.json --daemon            # persistent daemon (600s idle)
@@ -62,7 +65,8 @@ Sharness tests cover: genesis, verify, signing (cli/did/p256), delete, linking, 
 | `src/aqua/forest.rs` | `--forest` ephemeral forest + `--daemon` persistent mode with REPL and Unix socket IPC |
 | `src/aqua/connect.rs` | `--connect <ID>` client REPL — connects to running daemon via Unix socket |
 | `src/aqua/target.rs` | `--target <ID>` helper — pushes Tree into running daemon via `ingest` command |
-| `src/simulation/` | `--simulate` identity state suite (12 scenarios) |
+| `src/simulation/` | `--simulate` (12 scenarios), `--simulate-personas` (15), `--simulate-2` (29) |
+| `src/simulation/sim2/` | SIM-2: 5 personas, 4 error scenarios, invalidation, all 17 WASM states |
 
 ---
 
