@@ -106,7 +106,7 @@ pub async fn e2_attestation_missing_signer_did() -> Sim2Result {
             "signer_did": "",
             "valid_from": null,
             "valid_until": null
-        }), Some(Method::Scalar))?;
+        }), Some(Method::Tree))?;
 
         let attest_c = attest_tree.clone();
         let claim_c = claim_tree.clone();

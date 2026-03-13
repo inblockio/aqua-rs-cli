@@ -99,7 +99,7 @@ pub fn build_claim_raw(
     payload: serde_json::Value,
 ) -> Result<Tree, MethodError> {
     let link = RevisionLink::from_bytes(template_hash);
-    aq.create_object(link, None, payload, Some(Method::Scalar))
+    aq.create_object(link, None, payload, Some(Method::Tree))
 }
 
 /// Normal (tip-appended) Ed25519 signature.
