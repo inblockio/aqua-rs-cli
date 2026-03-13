@@ -21,7 +21,35 @@ use aqua_rs_sdk::{
 };
 
 use crate::simulation::builders;
+use crate::simulation::keygen;
 use crate::simulation::scenarios::extract_state;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared attestors (3 institutional identities used across all personas)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Three institutional attestor identities shared across all SIM-2 personas.
+pub struct Attestors {
+    /// Government — Ed25519 key, official document attestations
+    pub gov_priv: Vec<u8>,
+    pub gov_did: String,
+    /// inblock.io — P-256 key, platform/tech attestations
+    pub inblock_priv: Vec<u8>,
+    pub inblock_did: String,
+    /// Linux Foundation — secp256k1/EIP-191 key, open-source/community attestations
+    pub lf_priv: Vec<u8>,
+    pub lf_did: String,
+}
+
+impl Attestors {
+    /// Generate fresh keys for all 3 attestors.
+    pub fn generate() -> Self {
+        let (gov_priv, gov_did) = keygen::generate_ed25519();
+        let (inblock_priv, inblock_did) = keygen::generate_p256();
+        let (lf_priv, lf_did) = keygen::generate_secp256k1();
+        Self { gov_priv, gov_did, inblock_priv, inblock_did, lf_priv, lf_did }
+    }
+}
 
 /// Result of a single SIM-2 scenario.
 #[derive(Debug)]
@@ -58,6 +86,7 @@ pub fn no_trust() -> Aquafier {
         .trust_store(Arc::new(DefaultTrustStore::new(HashMap::new())))
         .build()
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Claim tree helpers

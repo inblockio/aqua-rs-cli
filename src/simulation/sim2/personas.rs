@@ -7,15 +7,23 @@
 //! across the three verification modules (identity_claim_verify,
 //! platform_identity_verify, attestation_verify).
 //!
+//! ## Attestors (3 shared institutional identities)
+//!
+//! | Attestor          | Key type  | Role                              |
+//! |-------------------|-----------|-----------------------------------|
+//! | Government        | Ed25519   | Official document attestations    |
+//! | inblock.io        | P-256     | Platform/tech attestations        |
+//! | Linux Foundation  | secp256k1 | Open-source/community attestations|
+//!
 //! ## Personas
 //!
-//! | # | Name            | Location   | Claims | Key type  |
-//! |---|-----------------|------------|--------|-----------|
-//! | 1 | Amara Osei      | Accra      | 7      | secp256k1 |
-//! | 2 | Kenji Tanaka    | Tokyo      | 5      | Ed25519   |
-//! | 3 | Sofia Reyes     | Mexico City| 4      | P-256     |
-//! | 4 | Lars Eriksson   | Stockholm  | 3      | Ed25519   |
-//! | 5 | Priya Sharma    | Mumbai     | 6      | secp256k1 |
+//! | # | Name            | Location   | Claims | Key type  | Attestor(s)        |
+//! |---|-----------------|------------|--------|-----------|--------------------|
+//! | 1 | Amara Osei      | Accra      | 7      | secp256k1 | Government         |
+//! | 2 | Kenji Tanaka    | Tokyo      | 5      | Ed25519   | Linux Foundation   |
+//! | 3 | Sofia Reyes     | Mexico City| 4      | P-256     | inblock.io         |
+//! | 4 | Lars Eriksson   | Stockholm  | 3      | Ed25519   | Government, Linux Foundation |
+//! | 5 | Priya Sharma    | Mumbai     | 6      | secp256k1 | Government, Linux Foundation |
 
 use aqua_rs_sdk::{
     primitives::{MethodError, RevisionLink},
@@ -44,11 +52,13 @@ use super::verify::*;
 /// - S1-5 AddressClaim            → `not_yet_valid`   (identity_claim: code 3, valid_from far future)
 /// - S1-6 PlatformIdentityClaim   → `attested`        (platform_identity: code 3, parallel trusted sig)
 /// - S1-7 Attestation             → `attested`        (attestation: code 3, two-tree model)
-pub async fn persona_amara() -> Vec<Sim2Result> {
+pub async fn persona_amara(att: &Attestors) -> Vec<Sim2Result> {
     const PERSONA: &str = "S1: Amara Osei (healthcare administrator, Accra)";
 
     let (amara_priv, amara_did) = keygen::generate_secp256k1();
-    let (org_priv, org_did) = keygen::generate_ed25519();
+    // Government attestor (Ed25519) — official healthcare compliance
+    let org_priv = &att.gov_priv;
+    let org_did = &att.gov_did;
 
     let mut out = Vec::new();
 
@@ -94,7 +104,7 @@ pub async fn persona_amara() -> Vec<Sim2Result> {
         let id = "S1-2".to_string();
         let ct: &str = "NameClaim";
         let exp: &str = "attested";
-        let desc = "Amara's legal name — hospital HR attested".to_string();
+        let desc = "Amara's legal name — Government attested".to_string();
 
         let aq = trust_one(&org_did, 2);
 
@@ -264,7 +274,7 @@ pub async fn persona_amara() -> Vec<Sim2Result> {
         let id = "S1-6".to_string();
         let ct: &str = "PlatformIdentityClaim";
         let exp: &str = "attested";
-        let desc = "Amara's hospital portal identity — org-attested".to_string();
+        let desc = "Amara's hospital portal identity — Government attested".to_string();
 
         let aq = trust_one(&org_did, 2);
 
@@ -317,7 +327,7 @@ pub async fn persona_amara() -> Vec<Sim2Result> {
         let id = "S1-7".to_string();
         let ct: &str = "Attestation";
         let exp: &str = "attested";
-        let desc = "Hospital attests Amara's platform identity (two-tree model)".to_string();
+        let desc = "Government attests Amara's platform identity (two-tree model)".to_string();
 
         if let Some((claim_tree, claim_obj_hash, claim_sig_hash)) = s1_6_claim_state {
             let aq = trust_one(&org_did, 2);
@@ -372,11 +382,12 @@ pub async fn persona_amara() -> Vec<Sim2Result> {
 /// - S2-3 DnsClaim       → `untrusted`    (identity_claim: self + 3rd party not in trust)
 /// - S2-4 BirthdateClaim → `self_signed`  (identity_claim: code 1)
 /// - S2-5 Attestation    → `headless`     (attestation: code 0, zero-hash sentinel)
-pub async fn persona_kenji() -> Vec<Sim2Result> {
+pub async fn persona_kenji(att: &Attestors) -> Vec<Sim2Result> {
     const PERSONA: &str = "S2: Kenji Tanaka (freelance photographer, Tokyo)";
 
     let (kenji_priv, kenji_did) = keygen::generate_ed25519();
-    let (third_priv, _third_did) = keygen::generate_p256(); // untrusted 3rd party
+    // Linux Foundation attestor (secp256k1) — untrusted 3rd party for DNS co-sign
+    let third_priv = &att.lf_priv;
 
     let mut out = Vec::new();
 
@@ -467,7 +478,7 @@ pub async fn persona_kenji() -> Vec<Sim2Result> {
         let id = "S2-3".to_string();
         let ct: &str = "DnsClaim";
         let exp: &str = "untrusted";
-        let desc = "Kenji's domain — self-signed + untrusted 3rd party co-sign".to_string();
+        let desc = "Kenji's domain — self-signed + Linux Foundation co-sign (untrusted)".to_string();
 
         let aq = no_trust();
 
@@ -480,7 +491,7 @@ pub async fn persona_kenji() -> Vec<Sim2Result> {
             let obj_hash = tree.get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
             let tree = self_sign_ed25519(&aq, tree, &kenji_priv).await?;
-            let tree = parallel_sign_p256(&aq, tree, &third_priv, obj_hash).await?;
+            let tree = parallel_sign_secp256k1(&aq, tree, third_priv, obj_hash).await?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
             Ok::<_, MethodError>((actual, raw, tree_c))
@@ -589,11 +600,13 @@ pub async fn persona_kenji() -> Vec<Sim2Result> {
 /// - S3-2 EmailClaim     → `expired`      (identity_claim: code 2, expired university email)
 /// - S3-3 DocumentClaim  → `self_signed`  (identity_claim: code 1, faculty cert)
 /// - S3-4 Attestation    → `unsigned`     (attestation: code 1, linked but not signed)
-pub async fn persona_sofia() -> Vec<Sim2Result> {
+pub async fn persona_sofia(att: &Attestors) -> Vec<Sim2Result> {
     const PERSONA: &str = "S3: Sofia Reyes (university professor, Mexico City)";
 
     let (sofia_priv, sofia_did) = keygen::generate_p256();
-    let (org_priv, org_did) = keygen::generate_p256();
+    // inblock.io attestor (P-256) — platform/academic attestations
+    let org_priv = &att.inblock_priv;
+    let org_did = &att.inblock_did;
 
     let mut out = Vec::new();
 
@@ -602,7 +615,7 @@ pub async fn persona_sofia() -> Vec<Sim2Result> {
         let id = "S3-1".to_string();
         let ct: &str = "GoogleClaim";
         let exp: &str = "attested";
-        let desc = "Sofia's Google identity — university attested".to_string();
+        let desc = "Sofia's Google identity — inblock.io attested".to_string();
 
         let aq = trust_one(&org_did, 2);
 
@@ -737,7 +750,7 @@ pub async fn persona_sofia() -> Vec<Sim2Result> {
         let id = "S3-4".to_string();
         let ct: &str = "Attestation";
         let exp: &str = "unsigned";
-        let desc = "Attestation for Sofia's Google identity — linked but not signed by attester".to_string();
+        let desc = "Attestation for Sofia's Google identity — linked but not signed by inblock.io".to_string();
 
         if let Some((claim_tree, claim_obj_hash, claim_sig_hash)) = s3_1_claim_state {
             let aq = no_trust();
@@ -790,12 +803,16 @@ pub async fn persona_sofia() -> Vec<Sim2Result> {
 /// - S4-1 AgeClaim            → `attested`       (identity_claim: org-attested for compliance)
 /// - S4-2 DriversLicenseClaim → `not_yet_valid`  (identity_claim: code 3, valid_from far future)
 /// - S4-3 Attestation         → `untrusted`      (attestation: code 2, attester not trusted)
-pub async fn persona_lars() -> Vec<Sim2Result> {
+pub async fn persona_lars(att: &Attestors) -> Vec<Sim2Result> {
     const PERSONA: &str = "S4: Lars Eriksson (cybersecurity consultant, Stockholm)";
 
     let (lars_priv, lars_did) = keygen::generate_ed25519();
-    let (org_priv, org_did) = keygen::generate_ed25519();
-    let (untrusted_priv, untrusted_did) = keygen::generate_p256();
+    // Government attestor (Ed25519) — compliance attestations
+    let org_priv = &att.gov_priv;
+    let org_did = &att.gov_did;
+    // Linux Foundation attestor (secp256k1) — used as untrusted attester for S4-3
+    let untrusted_priv = &att.lf_priv;
+    let untrusted_did = &att.lf_did;
 
     let mut out = Vec::new();
 
@@ -804,7 +821,7 @@ pub async fn persona_lars() -> Vec<Sim2Result> {
         let id = "S4-1".to_string();
         let ct: &str = "AgeClaim";
         let exp: &str = "attested";
-        let desc = "Lars is 18+ — org compliance-verified".to_string();
+        let desc = "Lars is 18+ — Government compliance-verified".to_string();
 
         let aq = trust_one(&org_did, 2);
 
@@ -903,7 +920,7 @@ pub async fn persona_lars() -> Vec<Sim2Result> {
         let id = "S4-3".to_string();
         let ct: &str = "Attestation";
         let exp: &str = "untrusted";
-        let desc = "Attestation for Lars's age — attester not in trust store".to_string();
+        let desc = "Attestation for Lars's age — Linux Foundation signed but not trusted".to_string();
 
         if let Some((claim_tree, claim_obj_hash, claim_sig_hash)) = s4_1_claim_state {
             // Empty trust store — attester is not trusted
@@ -911,9 +928,9 @@ pub async fn persona_lars() -> Vec<Sim2Result> {
 
             let result = match async {
                 let attest_tree = builders::build_attestation_tree(
-                    &aq, &untrusted_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
+                    &aq, untrusted_did, &claim_sig_hash, &claim_obj_hash.to_string(), None, None,
                 )?;
-                let attest_tree = builders::sign_p256(&aq, attest_tree, &untrusted_priv).await?;
+                let attest_tree = builders::sign_secp256k1(&aq, attest_tree, untrusted_priv).await?;
                 let attest_c = attest_tree.clone();
                 let claim_c = claim_tree.clone();
                 let (actual, raw) = verify_attestation(&aq, attest_tree, claim_tree).await?;
@@ -960,12 +977,15 @@ pub async fn persona_lars() -> Vec<Sim2Result> {
 /// - S5-4 NationalIdClaim       → `untrusted`     (identity_claim: 3rd party not in trust)
 /// - S5-5 Attestation           → `expired`       (attestation: code 4, valid_until=1000)
 /// - S5-6 Attestation           → `not_yet_valid` (attestation: code 5, valid_from far future)
-pub async fn persona_priya() -> Vec<Sim2Result> {
+pub async fn persona_priya(att: &Attestors) -> Vec<Sim2Result> {
     const PERSONA: &str = "S5: Priya Sharma (FinTech startup founder, Mumbai)";
 
     let (priya_priv, priya_did) = keygen::generate_secp256k1();
-    let (org_priv, org_did) = keygen::generate_ed25519();
-    let (untrusted_priv, _untrusted_did) = keygen::generate_p256();
+    // Government attestor (Ed25519) — regulatory compliance attestations
+    let org_priv = &att.gov_priv;
+    let org_did = &att.gov_did;
+    // Linux Foundation attestor (secp256k1) — untrusted 3rd party for S5-4
+    let untrusted_priv = &att.lf_priv;
 
     let mut out = Vec::new();
 
@@ -1073,7 +1093,7 @@ pub async fn persona_priya() -> Vec<Sim2Result> {
         let id = "S5-3".to_string();
         let ct: &str = "PhoneClaim";
         let exp: &str = "attested";
-        let desc = "Priya's phone — telco-verified via trusted org".to_string();
+        let desc = "Priya's phone — Government regulatory verification".to_string();
 
         let aq = trust_one(&org_did, 2);
 
@@ -1113,7 +1133,7 @@ pub async fn persona_priya() -> Vec<Sim2Result> {
         let id = "S5-4".to_string();
         let ct: &str = "NationalIdClaim";
         let exp: &str = "untrusted";
-        let desc = "Priya's Aadhaar — co-signed by untrusted 3rd party".to_string();
+        let desc = "Priya's Aadhaar — co-signed by Linux Foundation (untrusted)".to_string();
 
         let aq = no_trust();
 
@@ -1132,7 +1152,7 @@ pub async fn persona_priya() -> Vec<Sim2Result> {
             let obj_hash = tree.get_latest_revision_link()
                 .ok_or_else(|| MethodError::Simple("empty tree".into()))?;
             let tree = self_sign_secp256k1(&aq, tree, &priya_priv).await?;
-            let tree = parallel_sign_p256(&aq, tree, &untrusted_priv, obj_hash).await?;
+            let tree = parallel_sign_secp256k1(&aq, tree, untrusted_priv, obj_hash).await?;
             let tree_c = tree.clone();
             let (actual, raw) = verify_claim(&aq, tree).await?;
             Ok::<_, MethodError>((actual, raw, tree_c))
@@ -1159,7 +1179,7 @@ pub async fn persona_priya() -> Vec<Sim2Result> {
         let id = "S5-5".to_string();
         let ct: &str = "Attestation";
         let exp: &str = "expired";
-        let desc = "Priya's attestation — trusted but expired (valid_until=1000)".to_string();
+        let desc = "Priya's attestation — Government attested but expired (valid_until=1000)".to_string();
 
         if let Some((ref claim_tree, ref claim_obj_hash, ref claim_sig_hash)) = base_claim_state {
             let aq = trust_one(&org_did, 2);
@@ -1203,7 +1223,7 @@ pub async fn persona_priya() -> Vec<Sim2Result> {
         let id = "S5-6".to_string();
         let ct: &str = "Attestation";
         let exp: &str = "not_yet_valid";
-        let desc = "Priya's attestation — trusted but not yet valid (valid_from far future)".to_string();
+        let desc = "Priya's attestation — Government attested but not yet valid (valid_from far future)".to_string();
 
         if let Some((ref claim_tree, ref claim_obj_hash, ref claim_sig_hash)) = base_claim_state {
             let aq = trust_one(&org_did, 2);

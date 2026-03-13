@@ -22,7 +22,7 @@ pub mod invalidate;
 pub mod personas;
 pub mod verify;
 
-use verify::Sim2Result;
+use verify::{Attestors, Sim2Result};
 
 use crate::simulation::sandbox;
 
@@ -32,13 +32,21 @@ pub async fn run_simulation_2(verbose: bool, keep: bool) {
     println!("===============================================");
     println!();
 
+    // ── Shared attestors (3 institutional identities) ───────────────────
+    let att = Attestors::generate();
+    println!("Attestors:");
+    println!("  Government        (Ed25519)   {}", att.gov_did);
+    println!("  inblock.io        (P-256)     {}", att.inblock_did);
+    println!("  Linux Foundation  (secp256k1) {}", att.lf_did);
+    println!();
+
     // ── Persona scenarios ──────────────────────────────────────────────────
     let all_persona_results: Vec<Vec<Sim2Result>> = vec![
-        personas::persona_amara().await,
-        personas::persona_kenji().await,
-        personas::persona_sofia().await,
-        personas::persona_lars().await,
-        personas::persona_priya().await,
+        personas::persona_amara(&att).await,
+        personas::persona_kenji(&att).await,
+        personas::persona_sofia(&att).await,
+        personas::persona_lars(&att).await,
+        personas::persona_priya(&att).await,
     ];
 
     let persona_labels = [
