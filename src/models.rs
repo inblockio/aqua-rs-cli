@@ -44,6 +44,8 @@ pub struct CliArgs {
     pub trust: Option<(String, u8)>,
     pub simulate: bool,
     pub simulate_personas: bool,
+    pub simulate_2: bool,
+    pub invalidate: Option<String>,
     pub keep: bool,
     pub daemon: Option<u64>,
     pub connect: Option<u64>,

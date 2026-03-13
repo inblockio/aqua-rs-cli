@@ -50,6 +50,20 @@ pub async fn sign_ed25519(
     Ok(op.aqua_tree)
 }
 
+/// Sign a tree with a secp256k1 key (`did:pkh:eip155:1`, EIP-191).
+pub async fn sign_secp256k1(
+    aquafier: &Aquafier,
+    tree: Tree,
+    private_key: &[u8],
+) -> Result<Tree, MethodError> {
+    let wrapper = AquaTreeWrapper::new(tree, None, None);
+    let creds = SigningCredentials::Secp256k1 {
+        secp256k1_key: private_key.to_vec(),
+    };
+    let op = aquafier.sign_aqua_tree(wrapper, &creds, None, None).await?;
+    Ok(op.aqua_tree)
+}
+
 /// Sign a tree with a P-256 key (`did:pkh:p256`).
 pub async fn sign_p256(
     aquafier: &Aquafier,

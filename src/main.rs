@@ -297,10 +297,23 @@ pub fn parse_args() -> Result<CliArgs, String> {
                 .help("Run the persona-based identity simulation — 5 personas, 15 claim scenarios covering all derived identity templates (requires --features simulation)"),
         )
         .arg(
+            Arg::new("simulate-2")
+                .long("simulate-2")
+                .action(ArgAction::SetTrue)
+                .help("Run the SIM-2 comprehensive identity simulation — 5 personas, 29 scenarios covering all 17 WASM states (requires --features simulation)"),
+        )
+        .arg(
+            Arg::new("invalidate")
+                .long("invalidate")
+                .action(ArgAction::Set)
+                .requires("simulate-2")
+                .help("Remove attester signature from a previously-written tree for state-viewer invalidation demo (use with --simulate-2)"),
+        )
+        .arg(
             Arg::new("keep")
                 .long("keep")
                 .action(ArgAction::SetTrue)
-                .help("Keep simulation tree files on disk for inspection (use with --simulate or --simulate-personas)"),
+                .help("Keep simulation tree files on disk for inspection (use with --simulate, --simulate-personas, or --simulate-2)"),
         )
         .arg(
             Arg::new("daemon")
@@ -357,7 +370,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         )
         .group(
             ArgGroup::new("operation")
-                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas", "connect", "cleanup"])
+                .args(["authenticate", "sign", "witness", "file", "delete", "link", "info", "create-object", "list-templates", "forest", "simulate", "simulate-personas", "simulate-2", "connect", "cleanup"])
                 .required(false),
         )
         .get_matches();
@@ -416,6 +429,8 @@ pub fn parse_args() -> Result<CliArgs, String> {
         .map(|vals| vals.map(PathBuf::from).collect());
     let simulate = matches.get_flag("simulate");
     let simulate_personas = matches.get_flag("simulate-personas");
+    let simulate_2 = matches.get_flag("simulate-2");
+    let invalidate = matches.get_one::<String>("invalidate").cloned();
     let keep = matches.get_flag("keep");
     let daemon = matches.get_one::<u64>("daemon").copied();
     let no_listen = matches.get_flag("no-listen");
@@ -468,6 +483,8 @@ pub fn parse_args() -> Result<CliArgs, String> {
         trust,
         simulate,
         simulate_personas,
+        simulate_2,
+        invalidate,
         keep,
         daemon,
         connect,
@@ -627,6 +644,25 @@ async fn main() {
         }
     }
 
+    if args.simulate_2 {
+        #[cfg(feature = "simulation")]
+        {
+            if let Some(ref target) = args.invalidate {
+                simulation::sim2::invalidate::run_invalidation(target);
+            } else {
+                simulation::sim2::run_simulation_2(args.verbose, args.keep).await;
+            }
+            return;
+        }
+        #[cfg(not(feature = "simulation"))]
+        {
+            eprintln!(
+                "Error: --simulate-2 requires building with `cargo build --features simulation`"
+            );
+            std::process::exit(1);
+        }
+    }
+
     if let Some(id) = args.connect {
         cli_connect_forest(id).await;
         return;
@@ -647,6 +683,7 @@ async fn main() {
         && args.forest_files.is_none()
         && !args.simulate
         && !args.simulate_personas
+        && !args.simulate_2
         && args.cleanup.is_none()
     {
         println!("{}", BASE_LONG_ABOUT);
