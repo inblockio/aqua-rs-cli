@@ -1018,12 +1018,14 @@ fn cmd_invalidate(state: &mut DaemonState, arg: &str) -> String {
         names
     };
 
-    // Collect revision hashes that are Signature nodes in the forest
+    // Collect revision hashes that are Signature nodes in the forest.
+    // StateNode.revision_type is a 0x-prefixed template hash, not the literal
+    // "signature" — use is_signature_revision_type() to match correctly.
     let mut sig_hashes: Vec<RevisionLink> = Vec::new();
     for (rev_hash_str, _) in &matching_entries {
         if let Ok(link) = rev_hash_str.parse::<RevisionLink>() {
             if let Some(node) = state.forest.get_state_node(&link) {
-                if node.revision_type == "signature" {
+                if aqua_rs_sdk::core::is_signature_revision_type(&node.revision_type) {
                     sig_hashes.push(link);
                 }
             }
