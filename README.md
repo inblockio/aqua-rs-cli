@@ -3,15 +3,67 @@ CLI tools to validate aqua chain.
 
 This project depends on [aqua-rs-sdk](https://github.com/inblockio/aqua-rs-sdk) v4.
 
-## optional
+## Simulation Suites
 
-### Auditing simulation trees
-Run once to persist the files:
+Three simulation modes are available (require `--features simulation`):
+
+| Flag | Scenarios | Coverage |
+|------|-----------|----------|
+| `--simulate` | 12 | Core WASM states: 6 claim + 6 attestation |
+| `--simulate-personas` | 15 | 5 personas covering all 15 derived identity templates |
+| `--simulate-2` | 29 | Comprehensive: 5 personas (25 claims) + 4 error scenarios covering all 17 WASM return values |
+
+### Running simulations
+
 ```bash
-cargo run --features simulation --bin aqua-cli -- --simulate --keep
-cargo run --features simulation --bin aqua-cli -- --simulate-personas --keep
+# Core 12-scenario suite
+cargo run --features simulation --bin aqua-cli -- --simulate -v
+
+# 15-persona template coverage suite
+cargo run --features simulation --bin aqua-cli -- --simulate-personas -v
+
+# SIM-2: comprehensive identity simulation (29 scenarios)
+cargo run --features simulation --bin aqua-cli -- --simulate-2 -v
 ```
-The directory path is printed — e.g. /tmp/aqua-sim-6MSEts.
+
+### Persisting simulation trees
+
+Add `--keep` to write `.aqua.json` files to a temporary directory for inspection or loading into the state-viewer:
+
+```bash
+cargo run --features simulation --bin aqua-cli -- --simulate-2 -v --keep
+# Output: /tmp/aqua-sim-XXXXXX/ with persona-named .aqua.json files
+```
+
+### SIM-2 with state-viewer (invalidation demo)
+
+SIM-2 integrates with the forest daemon for real-time state-viewer invalidation:
+
+```bash
+# 1. Generate and persist the dataset
+cargo run --features simulation --bin aqua-cli -- --simulate-2 --keep
+
+# 2. Load into a forest daemon (HTTP API for state-viewer)
+cargo run --bin aqua-cli -- --forest /tmp/aqua-sim-*/*.aqua.json --daemon
+
+# 3. In the daemon REPL, remove signature nodes to demonstrate invalidation
+forest> invalidate amara-attestation
+# State-viewer detects removal via GET /removed → attested → unsigned
+```
+
+The `invalidate` REPL command matches ingested tree names by substring, finds all signature nodes in the matching tree, and removes them from the forest. The state-viewer polls `GET /removed` to detect and reflect the change in real time.
+
+### SIM-2 personas
+
+| # | Persona | Location | Claims | Key type | WASM states covered |
+|---|---------|----------|--------|----------|---------------------|
+| S1 | Amara Osei | Accra | 7 | secp256k1/EIP-191 | self_signed, attested, expired, not_yet_valid (claim + platform + attestation) |
+| S2 | Kenji Tanaka | Tokyo | 5 | Ed25519 | self_signed, unsigned, untrusted, headless |
+| S3 | Sofia Reyes | Mexico City | 4 | P-256 | attested, expired, self_signed, unsigned (attestation) |
+| S4 | Lars Eriksson | Stockholm | 3 | Ed25519 | attested, not_yet_valid, untrusted (attestation) |
+| S5 | Priya Sharma | Mumbai | 6 | secp256k1/EIP-191 | unsigned, self_signed, attested, untrusted, expired, not_yet_valid (attestation) |
+
+Error scenarios E1–E4 cover structural rejection (-1), headless edge cases, and self-attestation.
 
 in your environment set the following variables.<br/>
 
@@ -52,6 +104,11 @@ Notes : if a keys file is speciefied in the commands it will take precendence ov
 | `--connect <ID>` | Connect to a running forest daemon's REPL by its PID |
 | `--target <ID>` | Push operation results into a running daemon's forest by its PID |
 | `--trust <DID> <LEVEL>` | Populate trust store (1=marginal, 2=full, 3=ultimate). Used with `--forest` |
+| `--simulate` | Run the 12-scenario WASM state simulation (requires `--features simulation`) |
+| `--simulate-personas` | Run the 15-scenario persona simulation (requires `--features simulation`) |
+| `--simulate-2` | Run the 29-scenario comprehensive identity simulation (requires `--features simulation`) |
+| `--invalidate <NAME>` | Remove attester signature for state-viewer invalidation demo (use with `--simulate-2`) |
+| `--keep` | Keep simulation tree files on disk for inspection |
 | `--cleanup [all]` | Remove orphaned daemon sockets; with `all`, also kill live daemons |
 
 ### `--previous-hash` option

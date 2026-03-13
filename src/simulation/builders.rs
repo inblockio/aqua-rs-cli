@@ -4,7 +4,7 @@
 //! Tree builders for the simulation scenarios.
 
 use aqua_rs_sdk::{
-    primitives::{Method, MethodError, RevisionLink},
+    primitives::{MethodError, RevisionLink},
     schema::{
         templates::{Attestation, PlatformIdentityClaim, TrustAssertion},
         tree::Tree,
@@ -33,7 +33,7 @@ pub fn build_claim_tree(
         valid_until,
         metadata: None,
     };
-    aquafier.identity().claim(claim, Some(Method::Scalar))
+    aquafier.identity().claim(claim)
 }
 
 /// Sign a tree with an Ed25519 key (`did:pkh:ed25519`).
@@ -45,6 +45,20 @@ pub async fn sign_ed25519(
     let wrapper = AquaTreeWrapper::new(tree, None, None);
     let creds = SigningCredentials::Did {
         did_key: private_key.to_vec(),
+    };
+    let op = aquafier.sign_aqua_tree(wrapper, &creds, None, None).await?;
+    Ok(op.aqua_tree)
+}
+
+/// Sign a tree with a secp256k1 key (`did:pkh:eip155:1`, EIP-191).
+pub async fn sign_secp256k1(
+    aquafier: &Aquafier,
+    tree: Tree,
+    private_key: &[u8],
+) -> Result<Tree, MethodError> {
+    let wrapper = AquaTreeWrapper::new(tree, None, None);
+    let creds = SigningCredentials::Secp256k1 {
+        secp256k1_key: private_key.to_vec(),
     };
     let op = aquafier.sign_aqua_tree(wrapper, &creds, None, None).await?;
     Ok(op.aqua_tree)
@@ -89,7 +103,7 @@ pub fn build_attestation_tree(
     };
     aquafier
         .identity()
-        .attestation(attest, claim_sig_hash, Some(Method::Scalar))
+        .attestation(attest, claim_sig_hash)
 }
 
 /// Build a "headless" attestation tree: genesis anchor links to a nonexistent
@@ -106,7 +120,7 @@ pub fn build_headless_attestation_tree(
     };
     aquafier
         .identity()
-        .headless_attestation(attest, Some(Method::Scalar))
+        .headless_attestation(attest)
 }
 
 /// Build a `TrustAssertion` tree asserting `trust_level` for `subject_did`.
@@ -126,7 +140,7 @@ pub fn build_trust_assertion_tree(
     };
     aquafier
         .identity()
-        .trust_assertion(ta, Some(Method::Scalar))
+        .trust_assertion(ta)
 }
 
 /// Get the template tree chain for a built-in template (root first).

@@ -554,6 +554,7 @@ async fn execute_command(state: &mut DaemonState, input: &str) -> String {
         "add" => cmd_add(state, arg).await,
         "evict" => cmd_evict(state, arg),
         "remove" => cmd_remove(state, arg),
+        "invalidate" => cmd_invalidate(state, arg),
         "ingest" => cmd_ingest(state, arg).await,
         _ => format!("Unknown command: '{}'. Type 'help' for available commands.", cmd),
     }
@@ -658,6 +659,7 @@ fn cmd_help() -> String {
     add <file> [file..] Ingest new .aqua.json files into forest
     evict <hash>        Remove genesis + cascade entire subtree
     remove <hash>       Surgical remove single node (no cascade)
+    invalidate <name>   Remove signature nodes from a named tree (e.g. amara-attestation)
 
   Session:
     help                Show this help
@@ -974,6 +976,103 @@ fn cmd_remove(state: &mut DaemonState, arg: &str) -> String {
         }
         Err(e) => e,
     }
+}
+
+fn cmd_invalidate(state: &mut DaemonState, arg: &str) -> String {
+    if arg.is_empty() {
+        return "Usage: invalidate <name>\n\
+                Removes all signature nodes from the tree whose source file matches <name>.\n\
+                Example: invalidate amara-attestation\n\
+                \n\
+                The name is matched against ingested file names (substring, case-insensitive).\n\
+                Use 'status' or check the file names from --simulate-2 --keep."
+            .to_string();
+    }
+
+    // Normalize: "amara-attestation" → "amara_attestation" for matching
+    let needle = arg.replace('-', "_").to_lowercase();
+
+    // Find all revision hashes belonging to trees whose source file name matches
+    let matching_entries: Vec<(String, String)> = state
+        .rev_to_tree
+        .iter()
+        .filter(|(_, (name, _))| {
+            let name_lower = name.to_lowercase();
+            name_lower.contains(&needle)
+        })
+        .map(|(rev_hash, (name, _))| (rev_hash.clone(), name.clone()))
+        .collect();
+
+    if matching_entries.is_empty() {
+        return format!(
+            "No ingested tree matches '{}'. Make sure trees are loaded (e.g. add /tmp/aqua-sim-*/*.aqua.json).",
+            arg
+        );
+    }
+
+    // Get the unique source file name(s)
+    let source_names: Vec<String> = {
+        let mut names: Vec<String> = matching_entries.iter().map(|(_, n)| n.clone()).collect();
+        names.sort();
+        names.dedup();
+        names
+    };
+
+    // Collect revision hashes that are Signature nodes in the forest.
+    // StateNode.revision_type is a 0x-prefixed template hash, not the literal
+    // "signature" — use is_signature_revision_type() to match correctly.
+    let mut sig_hashes: Vec<RevisionLink> = Vec::new();
+    for (rev_hash_str, _) in &matching_entries {
+        if let Ok(link) = rev_hash_str.parse::<RevisionLink>() {
+            if let Some(node) = state.forest.get_state_node(&link) {
+                if aqua_rs_sdk::core::is_signature_revision_type(&node.revision_type) {
+                    sig_hashes.push(link);
+                }
+            }
+        }
+    }
+
+    if sig_hashes.is_empty() {
+        return format!(
+            "Found tree(s) matching '{}' ({}) but no signature nodes to remove.",
+            arg,
+            source_names.join(", ")
+        );
+    }
+
+    let mut out = format!(
+        "Invalidating '{}' — removing {} signature node(s) from: {}\n",
+        arg,
+        sig_hashes.len(),
+        source_names.join(", ")
+    );
+
+    for hash in &sig_hashes {
+        if state.forest.remove_node(hash) {
+            let hash_str = hash.to_string();
+            state.removed_hashes.push(hash_str.clone());
+
+            // Strip from rev_to_tree and source trees (same logic as cmd_remove)
+            let source_name = state
+                .rev_to_tree
+                .get(&hash_str)
+                .map(|(name, _)| name.clone());
+            state.rev_to_tree.remove(&hash_str);
+            if let Some(name) = source_name {
+                for (_k, (entry_name, tree)) in state.rev_to_tree.iter_mut() {
+                    if *entry_name == name {
+                        tree.revisions.remove(hash);
+                        tree.file_index.remove(hash);
+                    }
+                }
+            }
+
+            out.push_str(&format!("  Removed: {}\n", truncate(&hash.to_string(), 20)));
+        }
+    }
+
+    out.push_str("\nState-viewer will detect removal via GET /removed.");
+    out.trim_end().to_string()
 }
 
 async fn cmd_ingest(state: &mut DaemonState, arg: &str) -> String {

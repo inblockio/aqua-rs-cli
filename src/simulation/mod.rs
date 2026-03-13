@@ -20,6 +20,7 @@ pub mod keygen;
 pub mod persona_scenarios;
 pub mod sandbox;
 pub mod scenarios;
+pub mod sim2;
 
 use persona_scenarios::PersonaResult;
 use scenarios::ScenarioResult;
